@@ -7,9 +7,13 @@ BaseFlight-Setup-Tool (Frontend for the CLI)
 Links:
 ======
 
-http://fpv-community.de/showthread.php?23045-einfachen-NAZE32-mw32-Setuptool-f%FCr-Linux-Mac-und-Windows/page6
+Forum: http://fpv-community.de/showthread.php?23045-einfachen-NAZE32-mw32-Setuptool-f%FCr-Linux-Mac-und-Windows
 
-http://www.youtube.com/watch?v=46JlaRcY2IE&feature=player_embedded
+Original-Firmware: https://github.com/multiwii/baseflight
+
+Better-Firmware: http://fpv-treff.de/viewtopic.php?f=18&t=1368
+
+Video: http://www.youtube.com/watch?v=46JlaRcY2IE&feature=player_embedded
 
 
 Running:
