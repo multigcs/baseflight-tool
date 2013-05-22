@@ -1068,6 +1068,9 @@ menu .menu.help -tearoff 0
 	.menu.help add command -label "fpv-treff.de (Harakiri-Software)" -command {
 		launchBrowser "http://fpv-treff.de/viewtopic.php?f=18&t=1368"
 	}
+	.menu.help add command -label "test XML-Help..." -command {
+		show_help PPM
+	}
 	.menu.help add separator
 	.menu.help add command -label "About..." -command {
 		show_help_about
@@ -1327,8 +1330,8 @@ proc rd_chid {chid} {
 						checkbutton .note.features.[string tolower $feature].check -text "$feature" -relief flat -variable features($feature)
 						pack .note.features.[string tolower $feature].check -side left -expand yes -fill x
 
-#						eval button .note.features.[string tolower $feature].help -text "HELP" -command \{show_help [string toupper $feature]\}
-#						pack .note.features.[string tolower $feature].help -side right -expand no -fill none
+						eval button .note.features.[string tolower $feature].help -text "HELP" -command \{show_help [string toupper $feature]\}
+						pack .note.features.[string tolower $feature].help -side right -expand no -fill none
 
 					}
 					set features($feature) 0
@@ -1529,6 +1532,9 @@ proc rd_chid {chid} {
 
 							eval button $wpath.send -width 1 -text \"S\" -command \{save_setting $var\}
 							pack $wpath.send -side left -expand no -fill none
+
+							eval button $wpath.help -width 1 -text \"?\" -command \{show_help [string toupper $var]\}
+							pack $wpath.help -side left -expand no -fill none
 					}
 					set settings($var) $val
 				} else {
@@ -2309,11 +2315,11 @@ update_table
 
 	set TEXT "
 Diese funktion ist hoch experimentell !!!
-bitte nur ausf�hren wenn Sie die M�glichkeit haben das Board manuell neu zu flashen,
-dazu ist der Zugang zu dem BOOT0-Pin n�tig.
+bitte nur ausführen wenn Sie die Möglichkeit haben das Board manuell neu zu flashen,
+dazu ist der Zugang zu dem BOOT0-Pin nötig.
 
 Beim kleinsten fehler muss das Board per Hand geflasht werden,
-der normale Weg einen reset/bootmode per CLI durchzuf�hren ist dann nicht mehr gegeben !
+der normale Weg einen reset/bootmode per CLI durchzuführen ist dann nicht mehr gegeben !
 
 	"
 
@@ -2487,27 +2493,6 @@ button .buttons.flashmode -text "Flashmode" -command {
 }
 pack .buttons.flashmode -side left -expand yes -fill x
 
-
-proc get_help {SEARCH} {
-	set helpfile [open "/tmp/h2" r]
-	set helpfile_data [read $helpfile]
-	close $helpfile
-	set FLAG "0"
-	foreach LINE [split $helpfile_data "<>\n"] {
-		if {$FLAG == 1 && [string len [lrange [split $LINE "="] 1 end]] > 10} {
-			set FLAG "0"
-			return "[join [lrange [split $LINE "="] 1 end] " "]"
-		}
-		if {[string match "/html/body/div/div/div/div/div/div/div/div/div/div/div/div/div/div/div/table/tbody/*=$SEARCH*" $LINE]} {
-			set FLAG "1"
-		}
-	}
-	return "NO HELP FOUND"
-}
-
-proc show_help {SEARCH} {
-	tk_dialog .dialog1 "Help: $SEARCH" "[get_help "$SEARCH"]" info 0 OK
-}
 
 
 set FlashSerial 0
@@ -2911,4 +2896,70 @@ proc FirmwarefileDialog {w file} {
 label .info -text "Not connected"
 pack .info -side top -expand no -fill x
 
+#####################################################################################
+# XML-Help parser
+#####################################################################################
 
+set OnlineHelp 1
+set HELPTEXT(loaded) 0
+proc xml_tag {tag cl selfcl props body}  {
+	global OnlineHelp
+	global Item
+	global Description
+	global Language
+	global HELPTEXT
+	if {$tag == "OnlineHelp"} {
+		if {$cl == "0"} {
+			set HELPTEXT(loaded) 1
+			set OnlineHelp 0
+			set Item ""
+			set Description ""
+			set Language ""
+		} else {
+			set OnlineHelp 1
+			if {$Description != ""} {
+				set map {Ã¤ ä Ã Ä Ã¼ ü Ã¼ Ü Ã¶ ö Ã Ö Ã ß &lt; < &gt; > <BR> \n}
+				set Description_new [string map $map $Description]
+				set map {\<BR\> \n}
+				set Description [string map $map $Description_new]
+#				puts "$Item,$Language=$Description"
+				set HELPTEXT($Item,$Language) "$Description"
+			}
+		}
+	}
+	if {$OnlineHelp == "0" && $cl == "0"} {
+		if {$tag == "Item"} {
+			set Item "$body"
+		} elseif {$tag == "Description"} {
+			set Description "$body"
+		} elseif {$tag == "Language"} {
+			set Language "$body"
+		}
+	}
+}
+
+proc xml_parse {cmd xml {start docstart}} {
+	regsub -all \{ $xml {\&ob;} xml
+	regsub -all \} $xml {\&cb;} xml
+	set exp {<(/?)([^\s/>]+)\s*([^/>]*)(/?)>}
+	set sub "\}\n$cmd {\\2} \[expr \{{\\1} ne \"\"\}\] \[expr \{{\\4} ne \"\"\}\] \
+		\[regsub -all -- \{\\s+|(\\s*=\\s*)\} {\\3} \" \"\] \{"
+	regsub -all $exp $xml $sub xml
+	eval "$cmd {$start} 0 0 {} \{ $xml \}"
+	eval "$cmd {$start} 1 1 {} {}"
+}
+
+proc show_help {SEARCH} {
+	global HELPTEXT
+	if {$HELPTEXT(loaded) == 0} {
+		set xml_data [getPage "http://www.klick-punkte.info/download/help.xml"]
+		if {$xml_data != ""} {
+			xml_parse xml_tag $xml_data
+		}
+	}
+	if {[info exists HELPTEXT($SEARCH,DE)]} {
+		tk_dialog .dialog1 "Help: $SEARCH" "$HELPTEXT($SEARCH,DE)" info 0 OK
+	} else {
+		tk_dialog .dialog1 "Help: $SEARCH" "no help for: $SEARCH" info 0 OK
+	}
+}
