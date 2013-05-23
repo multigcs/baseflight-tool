@@ -2923,7 +2923,7 @@ proc xml_tag {tag cl selfcl props body}  {
 				set map {\<BR\> \n}
 				set Description [string map $map $Description_new]
 #				puts "$Item,$Language=$Description"
-				set HELPTEXT($Item,$Language) "$Description"
+				set HELPTEXT([string toupper $Item],$Language) "$Description"
 			}
 		}
 	}
