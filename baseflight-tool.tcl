@@ -1042,6 +1042,8 @@ BXuGhBnQgPMCKO9u7yxiQgMkDyAlwQ5N4AD54oAKbFICiIB2RskwjQ8I1GcRtdEZEKWNkoCQcS/+
 zuI07MIqMAIL/C8LEMEghMIsJNXFTIMttAIkHMIPkMAP/MAheIIqrF8JBQQAOw==
 }
 
+set baud 115200
+set baudrates "9600 38400 57600 115200"
 
 
 wm title . "MW32/NAZE32-Setup-Tool"
@@ -1214,9 +1216,10 @@ proc connect_serial {} {
 	global mode
 	global count
 	global device
+	global baud
 
 	set device [.device.spin get]
-	set Serial [Serial_Init $device 115200]
+	set Serial [Serial_Init $device $baud]
 	set mode ""
 	set count 0
 
@@ -1746,6 +1749,11 @@ pack .device -side top -expand no -fill x
 		spinbox .device.spin -values $comports -width 10  -textvariable device
 	}
 	pack .device.spin -side left -expand yes -fill x
+
+	if {[catch {ttk::combobox .device.baud -textvariable baud -width 7 -state readonly -values $baudrates}]} {
+		spinbox .device.baud -values $baudrates -width 7 -textvariable baud
+	}
+	pack .device.baud -side left -expand no -fill x
 
 	button .device.connect -text "Connect/Reload" -width 15 -command {
 		connect_serial
