@@ -1276,10 +1276,13 @@ proc connect_serial {} {
 	flush $Serial
 	after 100
 
-#	puts -nonewline $Serial "set\n\r"
 	puts -nonewline $Serial "set *\n\r"
 	flush $Serial
 	after 200
+
+#	puts -nonewline $Serial "set\n\r"
+#	flush $Serial
+#	after 200
 
 	puts -nonewline $Serial "aux\n\r"
 	flush $Serial
@@ -1385,6 +1388,12 @@ proc rd_chid {chid} {
 				set val [lindex $buffer 2]
 				set min [lindex $buffer 3]
 				set max [lindex $buffer 4]
+				if {$min == ""} {
+					set min "-99999"
+				}
+				if {$max == ""} {
+					set max "99999"
+				}
 				if {[string match "gimbal_*" $check]} {
 					set section "gimbal"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
@@ -1606,7 +1615,7 @@ proc rd_chid {chid} {
 							label $wpath.label -text "$labeltext" -width 10 -anchor w
 							pack $wpath.label -side left -expand yes -fill x
 
-							if {[string match "*.*" $min] || [string match "*.*" $max]} {
+							if {[string match "*.*" $min] || [string match "*.*" $max] || [string match "*.*" $val]} {
 								scale $wpath.scale -orient horizontal -length 100 -from $min -to $max -variable settings($var) -tickinterval 0 -resolution 0.001 -showvalue false
 								pack $wpath.scale -side left -expand yes -fill x
 
