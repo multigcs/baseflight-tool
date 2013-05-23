@@ -1145,13 +1145,16 @@ set tabname(pitchrollyaw) "Pitch/Roll/Yaw"
 set tabname(align) "Align"
 set tabname(accgyromag) "Acc/Gyro/Mag"
 set tabname(gps) "GPS"
+set tabname(alt) "Baro/Sonar"
 set tabname(nav) "Navigation"
 set tabname(gimbal) "Gimbal"
 set tabname(wing) "Wing"
 set tabname(tri) "Tricopter"
+set tabname(led) "LED"
 set tabname(etc) "ETC"
 
 set comports ""
+set Serial 0
 
 if {[string match "*Linux*" $tcl_platform(os)]} {
 	catch {set comports [glob /dev/ttyUSB*]}
@@ -1174,10 +1177,19 @@ if {[string match "*Linux*" $tcl_platform(os)]} {
 	set device "[lindex $comports end]"
 }
 
+proc disable_all {path} {
+    catch {$path configure -state disabled}
+    foreach child [winfo children $path] {
+        disable_all $child
+    }
+}
 
-
-set Serial 0
-
+proc enable_all {path} {
+    catch {$path configure -state normal}
+    foreach child [winfo children $path] {
+        enable_all $child
+    }
+}
 
 proc serial_send {Serial line} {
 	.info configure -text "send: $line"
@@ -1217,6 +1229,10 @@ proc connect_serial {} {
 	global count
 	global device
 	global baud
+
+	.version configure -text "waiting......"
+	.info configure -text "waiting......"
+	update
 
 	set device [.device.spin get]
 	set Serial [Serial_Init $device $baud]
@@ -1260,11 +1276,16 @@ proc connect_serial {} {
 	flush $Serial
 	after 100
 
-	puts -nonewline $Serial "set\n\r"
+#	puts -nonewline $Serial "set\n\r"
+	puts -nonewline $Serial "set *\n\r"
 	flush $Serial
 	after 200
 
 	puts -nonewline $Serial "aux\n\r"
+	flush $Serial
+	after 200
+
+	puts -nonewline $Serial "servo\n\r"
 	flush $Serial
 	after 200
 
@@ -1313,6 +1334,8 @@ proc rd_chid {chid} {
 	global aux_bit
 	global settings
 	global TABLE
+	global I2CDevices
+	global servo
 	if {$chid == 0} {
 		return
 	}
@@ -1339,23 +1362,43 @@ proc rd_chid {chid} {
 					}
 					set features($feature) 0
 				}
+			} elseif {$mode == "scani2cbus"} {
+				if {[string match "I2C device found at*" $buffer]} {
+					set addr [lindex $buffer 5]
+					set chip [lindex $buffer 8]
 
+					append I2CDevices "\n$buffer"
+
+					.note.scan.output.info configure -text "$I2CDevices"
+
+				} else {
+					set mode ""
+				}
 			} elseif {$mode == "settings"} {
+				## Workaround ##
+				if {[string match "Current settings: *" $buffer]} {
+					set buffer [string range $buffer 18 end]
+				}
+
+				set check [string tolower $buffer]
 				set var [lindex $buffer 0]
 				set val [lindex $buffer 2]
-				if {[string match "gimbal_*" $buffer]} {
+				set min [lindex $buffer 3]
+				set max [lindex $buffer 4]
+				if {[string match "gimbal_*" $check]} {
 					set section "gimbal"
-					set firststr [lindex [split $var "_"] 1]
+					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
 					catch {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "gps_*" $buffer]} {
+				} elseif {[string match "gps_*" $check]} {
+
 					set section "gps"
-					set firststr [lindex [split $var "_"] 1]
+					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
 					if {[string match "*brake*" $var]} {
 						set firststr "brake"
@@ -1370,23 +1413,23 @@ proc rd_chid {chid} {
 						labelframe .note.settings.subnote.$section.$fside.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$fside.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$fside.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$fside.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "tri_*" $buffer]} {
+				} elseif {[string match "tri_*" $check]} {
 					set section "tri"
-					set firststr [lindex [split $var "_"] 1]
+					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
 					catch {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "failsafe_*" $buffer] || [string match "spektrum_*" $buffer] || [string match "midrc*" $buffer] || [string match "rc_*" $buffer] || [string match "aux*" $buffer] || [string match "deadband*" $buffer]} {
+				} elseif {[string match "failsafe_*" $check] || [string match "spektrum_*" $check] || [string match "midrc*" $check] || [string match "rc_*" $check] || [string match "aux*" $check] || [string match "deadband*" $check]} {
 					set section "rc"
-					if {[string match "failsafe_*" $buffer]} {
+					if {[string match "failsafe_*" $check]} {
 						set firststr "failsafe"
-					} elseif {[string match "spektrum_*" $buffer]} {
+					} elseif {[string match "spektrum_*" $check]} {
 						set firststr "spektrum"
 					} else {
 						set firststr "misc"
@@ -1396,11 +1439,11 @@ proc rd_chid {chid} {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "vbat*" $buffer] || [string match "power_*" $buffer]} {
+				} elseif {[string match "vbat*" $check] || [string match "power_*" $check]} {
 					set section "vbat"
-					if {[string match "vbat*" $buffer]} {
+					if {[string match "vbat*" $check]} {
 						set firststr "vbat"
 					} else {
 						set firststr "adc"
@@ -1410,21 +1453,53 @@ proc rd_chid {chid} {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "wing_*" $buffer]} {
+				} elseif {[string match "wing_*" $check]} {
 					set section "wing"
-					set firststr [lindex [split $var "_"] 1]
+					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
 					catch {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "pitch_*" $buffer] || [string match "roll_*" $buffer] || [string match "yaw*" $buffer]} {
+				} elseif {[string match "baro*" $check] || [string match "sonar*" $check]} {
+					set section "alt"
+					set firststr [string tolower [lindex [split $var "_"] 1]]
+					set laststr [lrange [split $var "_"] 2 end]
+					if {$firststr == ""} {
+						set firststr "etc"
+					}
+					if {$laststr == ""} {
+						set laststr $var
+					}
+					catch {
+						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
+						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
+					}
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
+					set labeltext "[string toupper $laststr]"
+				} elseif {[string match "led*" $check] || [string match "mwcrgb*" $check]} {
+					set section "led"
+					set firststr [string tolower [lindex [split $var "_"] 1]]
+					set laststr [lrange [split $var "_"] 2 end]
+					if {$firststr == ""} {
+						set firststr "etc"
+					}
+					if {$laststr == ""} {
+						set laststr $var
+					}
+					catch {
+						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
+						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
+					}
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
+					set labeltext "[string toupper $laststr]"
+				} elseif {[string match "pitch_*" $check] || [string match "roll_*" $check] || [string match "yaw*" $check]} {
 					set section "pitchrollyaw"
-					set firststr [lindex [split $var "_"] 0]
+					set firststr [string tolower [lindex [split $var "_"] 0]]
 					set laststr [lrange [split $var "_"] 1 end]
 					if {$firststr == "yawdeadband" || $firststr == "yawrate"} {
 						set firststr "yaw"
@@ -1434,39 +1509,45 @@ proc rd_chid {chid} {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "$laststr"
-				} elseif {[string match "align_*" $buffer]} {
+				} elseif {[string match "align_*" $check]} {
 					set section "align"
-					set firststr [lindex [split $var "_"] 1]
+					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
 					catch {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "acc_*" $buffer] || [string match "gyro_*" $buffer] || [string match "accz_*" $buffer] || [string match "mag_*" $buffer]} {
+				} elseif {[string match "acc_*" $check] || [string match "gyro_*" $check] || [string match "accz_*" $check] || [string match "mag_*" $check]} {
 					set section "accgyromag"
-					set firststr [lindex [split $var "_"] 0]
+					set firststr [string tolower [lindex [split $var "_"] 0]]
 					set laststr [lrange [split $var "_"] 1 end]
 					catch {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "nav_*" $buffer]} {
+				} elseif {[string match "nav_*" $check] || [string match "autoland*" $check]} {
 					set section "nav"
-					set firststr [lindex [split $var "_"] 1]
+					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
+					if {$firststr == ""} {
+						set firststr "etc"
+					}
+					if {$laststr == ""} {
+						set laststr $var
+					}
 					catch {
 						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "p_*" $buffer] || [string match "i_*" $buffer] || [string match "d_*" $buffer]} {
+				} elseif {[string match "p_*" $check] || [string match "i_*" $check] || [string match "d_*" $check]} {
 					set section "pid"
 					set pid [lindex [split $var "_"] 0]
 					set sub [lindex [split $var "_"] 1]
@@ -1479,28 +1560,28 @@ proc rd_chid {chid} {
 						labelframe .note.settings.subnote.$section.$fside.$sub -text "$sub"
 						pack .note.settings.subnote.$section.$fside.$sub -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$fside.$sub.$var"
+					set wpath ".note.settings.subnote.$section.$fside.$sub.[string tolower $var]"
 					set labeltext "[string toupper $pid]"
-				} elseif {[string match "#*" $buffer]} {
+				} elseif {[string match "#*" $check]} {
 					set mode ""
 				} else {
 					set section "etc"
 					set fside "left"
-					if {[string match "*check*" $buffer]} {
+					if {[string match "*check*" $check]} {
 						set firststr "check"
 						set fside "right"
-					} elseif {[string match "*throttle*" $buffer] || [string match "*thr_*" $buffer]} {
+					} elseif {[string match "*throttle*" $check] || [string match "*thr_*" $check]} {
 						set firststr "throttle"
 						set fside "right"
-					} elseif {[string match "*_pwm_*" $buffer]} {
+					} elseif {[string match "*_pwm_*" $check]} {
 						set firststr "pwm"
 						set fside "right"
-					} elseif {[string match "led_*" $buffer]} {
+					} elseif {[string match "led_*" $check]} {
 						set firststr "led"
 						set fside "right"
-					} elseif {[string match "serial_*" $buffer]} {
+					} elseif {[string match "serial_*" $check]} {
 						set firststr "serial"
-					} elseif {[string match "*deadband*" $buffer]} {
+					} elseif {[string match "*deadband*" $check]} {
 						set firststr "deadband"
 					} else {
 						set firststr "misc"
@@ -1510,7 +1591,7 @@ proc rd_chid {chid} {
 						labelframe .note.settings.subnote.$section.$fside.$firststr -text "[string toupper $firststr]"
 						pack .note.settings.subnote.$section.$fside.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$fside.$firststr.$var"
+					set wpath ".note.settings.subnote.$section.$fside.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
 				}
 				if {$var != ""} {
@@ -1518,20 +1599,37 @@ proc rd_chid {chid} {
 						frame $wpath
 						pack $wpath -side top -expand yes -fill x
 
-							label $wpath.label -text "$labeltext" -width 10
+#							if {$labeltext == ""} {
+								set labeltext "[string toupper $var]"
+#							}
+
+							label $wpath.label -text "$labeltext" -width 10 -anchor w
 							pack $wpath.label -side left -expand yes -fill x
 
-#							spinbox $wpath.spin -width 10 -value $val -textvariable settings($var)
-#							pack $wpath.spin -side left -expand yes -fill x
+							if {[string match "*.*" $min] || [string match "*.*" $max]} {
+								scale $wpath.scale -orient horizontal -length 100 -from $min -to $max -variable settings($var) -tickinterval 0 -resolution 0.001 -showvalue false
+								pack $wpath.scale -side left -expand yes -fill x
 
-							entry $wpath.spin -width 10 -textvariable settings($var)
-							pack $wpath.spin -side left -expand yes -fill x
+								entry $wpath.entry -width 5 -textvariable settings($var)
+								pack $wpath.entry -side left -expand no -fill x
+							} else {
+								if {$min == 0 && $max == 1} {
+									checkbutton $wpath.check -text "0/1" -relief flat -anchor w -variable settings($var)
+									pack $wpath.check -side left -expand yes -fill x
+								} else {
+									scale $wpath.scale -orient horizontal -length 100 -from $min -to $max -variable settings($var) -tickinterval 0 -resolution 1 -showvalue false
+									pack $wpath.scale -side left -expand yes -fill x
 
-							eval button $wpath.down -width 1 -text \"-\" -command \{incr settings($var) -1\}
-							pack $wpath.down -side left -expand no -fill none
+									entry $wpath.entry -width 5 -textvariable settings($var)
+									pack $wpath.entry -side left -expand no -fill x
+								}
+							}
 
-							eval button $wpath.up -width 1 -text \"+\" -command \{incr settings($var) +1\}
-							pack $wpath.up -side left -expand no -fill none
+#							eval button $wpath.down -width 1 -text \"-\" -command \{incr settings($var) -1\}
+#							pack $wpath.down -side left -expand no -fill none
+
+#							eval button $wpath.up -width 1 -text \"+\" -command \{incr settings($var) +1\}
+#							pack $wpath.up -side left -expand no -fill none
 
 							eval button $wpath.send -width 1 -text \"S\" -command \{save_setting $var\}
 							pack $wpath.send -side left -expand no -fill none
@@ -1544,6 +1642,7 @@ proc rd_chid {chid} {
 					set mode ""
 				}
 			} else {
+				#puts "$buffer"
 				if {[string match "System Uptime*" $buffer]} {
 					.info configure -text "$buffer"
 				} elseif {[string match "Naze32*" $buffer] || [string match "Afro32*" $buffer]} {
@@ -1555,6 +1654,11 @@ proc rd_chid {chid} {
 					update
 				} elseif {[string match "Current settings:*" $buffer]} {
 					set mode "settings"
+				} elseif {[string match "*Scanning I2C-Bus*" $buffer]} {
+					set mode "scani2cbus"
+					set I2CDevices ""
+					.version configure -text "$buffer"
+					update
 				} elseif {[string match "Current assignment:*" $buffer]} {
 					set channels "[split [lindex $buffer 2] ""]"
 					foreach part {{roll A} {pitch E} {throttle T} {yaw R} {aux1 1} {aux2 2} {aux3 3} {aux4 4}} {
@@ -1637,6 +1741,38 @@ proc rd_chid {chid} {
 						incr bit_num
 					}
 					set aux($aux_num) $aux_val
+				} elseif {[string match "servo *" $buffer]} {
+					set servo_num [lindex $buffer 1]
+					set servo($servo_num,min) [lindex $buffer 2]
+					set servo($servo_num,max) [lindex $buffer 3]
+					set servo($servo_num,center) [lindex $buffer 4]
+					set rev_drate [lindex $buffer 5]
+					if {$rev_drate < 0} {
+						set servo($servo_num,drate) [expr $rev_drate * -1]
+						set servo($servo_num,rev) 1
+					} else {
+						set servo($servo_num,drate) $rev_drate
+						set servo($servo_num,rev) 0
+					}
+					catch {
+						labelframe .note.servos.s$servo_num -text "Servo-[expr $servo_num + 1]"
+						pack .note.servos.s$servo_num -side top -expand yes -fill x
+	
+						scale .note.servos.s$servo_num.min -orient horizontal -length 100 -from 800 -to 2200 -variable servo($servo_num,min) -tickinterval 0 -resolution 1 -showvalue true
+						pack .note.servos.s$servo_num.min -side left -expand yes -fill x
+
+						scale .note.servos.s$servo_num.center -orient horizontal -length 100 -from 800 -to 2200 -variable servo($servo_num,center) -tickinterval 0 -resolution 1 -showvalue true
+						pack .note.servos.s$servo_num.center -side left -expand yes -fill x
+
+						scale .note.servos.s$servo_num.max -orient horizontal -length 100 -from 800 -to 2200 -variable servo($servo_num,max) -tickinterval 0 -resolution 1 -showvalue true
+						pack .note.servos.s$servo_num.max -side left -expand yes -fill x
+
+						scale .note.servos.s$servo_num.drate -orient horizontal -length 100 -from 0 -to 100 -variable servo($servo_num,drate) -tickinterval 0 -resolution 1 -showvalue true
+						pack .note.servos.s$servo_num.drate -side left -expand yes -fill x
+
+						checkbutton .note.servos.s$servo_num.rev -text "$servo_num - $buffer" -relief flat -text "REV" -variable servo($servo_num,rev)
+						pack .note.servos.s$servo_num.rev -side left -expand yes -fill x
+					}
 				} elseif {[string match "#*" $buffer]} {
 					set mode ""
 				}
@@ -1720,7 +1856,15 @@ proc fileDialog {w operation} {
 						puts $fp "aux $val [bits2int $bin]"
 					}
 				}
-
+				catch {
+					foreach servo_num "0 1 2 3 4 5 6 7" {
+						if {$servo($servo_num,rev) == 1} {
+							puts $fp "servo $servo_num $servo($servo_num,min) $servo($servo_num,max) $servo($servo_num,center) -$servo($servo_num,drate)"
+						} else {
+							puts $fp "servo $servo_num $servo($servo_num,min) $servo($servo_num,max) $servo($servo_num,center) $servo($servo_num,drate)"
+						}
+					}
+				}
 				close $fp
 				.info configure -text "save2file: done"
 				update
@@ -1769,9 +1913,16 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 		ttk::notebook .note.settings.subnote
 		pack .note.settings.subnote -fill both -expand 1 -padx 2 -pady 3
 
-		foreach section "pid rc vbat pitchrollyaw align accgyromag gps nav gimbal wing tri etc" {
+		foreach section "pid rc vbat pitchrollyaw align accgyromag alt gps nav gimbal wing tri led etc" {
 			ttk::frame .note.settings.subnote.$section
 			.note.settings.subnote add .note.settings.subnote.$section -text "$tabname($section)"
+		}
+		## adding unsorted tabnames ##
+		foreach section "[array names tabname]" {
+			catch {
+				ttk::frame .note.settings.subnote.$section
+				.note.settings.subnote add .note.settings.subnote.$section -text "$tabname($section)"
+			}
 		}
 
 		frame .note.settings.subnote.gps.left
@@ -2271,17 +2422,38 @@ trace variable TABLE w watch
 update_table
 
 
+	ttk::frame .note.servos
+	.note add .note.servos -text "Servos"
+
+		frame .note.servos.labels
+		pack .note.servos.labels -side top -expand no -fill x
+
+		label .note.servos.labels.min -text "Min" -width 10
+		pack .note.servos.labels.min -side left -expand yes -fill x
+
+		label .note.servos.labels.center -text "Center" -width 10
+		pack .note.servos.labels.center -side left -expand yes -fill x
+
+		label .note.servos.labels.max -text "Max" -width 10
+		pack .note.servos.labels.max -side left -expand yes -fill x
+
+		label .note.servos.labels.drate -text "DR" -width 10
+		pack .note.servos.labels.drate -side left -expand yes -fill x
+
+		label .note.servos.labels.rev -text "Reverse"
+		pack .note.servos.labels.rev -side left -expand yes -fill x
+
 	ttk::frame .note.aux
 	.note add .note.aux -text "Aux"
 
 	frame .note.aux.aux
 	pack .note.aux.aux -side left -expand yes -fill both
 
-	label .note.aux.aux.label -text "Aux-Name" -relief flat
-	pack .note.aux.aux.label -side top -expand no -fill x
-
 	label .note.aux.aux.label2 -text "Position" -relief flat
 	pack .note.aux.aux.label2 -side top -expand no -fill x
+
+	label .note.aux.aux.label -text "Aux-Name" -relief flat
+	pack .note.aux.aux.label -side top -expand no -fill x
 
 	set bit_num 0
 	set aux_num2 0
@@ -2318,6 +2490,33 @@ update_table
 
 
 
+	ttk::frame .note.scan
+	.note add .note.scan -text "I2C-Scan"
+
+	frame .note.scan.output
+	pack .note.scan.output -side top -expand yes -fill both
+
+		label .note.scan.output.info -text "---"
+		pack .note.scan.output.info -side top -expand no -fill x
+
+	frame .note.scan.button
+	pack .note.scan.button -side top -expand no -fill x
+
+		button .note.scan.button.flash -text "Scan" -command {
+			global Serial
+			global settings
+			if {$Serial != 0} {
+				serial_send $Serial "scani2cbus"
+			} else {
+				.info configure -text "send: error, no serial connection"
+				update
+			}
+		}
+		pack .note.scan.button.flash -side top -expand yes -fill x
+
+
+
+
 	ttk::frame .note.flash
 	.note add .note.flash -text "Flash"
 
@@ -2328,6 +2527,8 @@ dazu ist der Zugang zu dem BOOT0-Pin nötig.
 
 Beim kleinsten fehler muss das Board per Hand geflasht werden,
 der normale Weg einen reset/bootmode per CLI durchzuführen ist dann nicht mehr gegeben !
+
+Bitte nutzen Sie nur .bin files, da es noch einen Bug im .hex loader gibt !!!
 
 	"
 
@@ -2342,11 +2543,11 @@ der normale Weg einen reset/bootmode per CLI durchzuführen ist dann nicht mehr 
 	pack .note.flash.list -side top -expand no -fill none
 
 		set sources ""
-		lappend sources "{Baseflight/Original} {http://afrodevices.googlecode.com/svn/trunk/baseflight/obj/baseflight.hex}"
+#		lappend sources "{Baseflight/Original} {http://afrodevices.googlecode.com/svn/trunk/baseflight/obj/baseflight.hex}"
 #		lappend sources "{Baseflight/r283} {http://afrodevices.googlecode.com/svn-history/r283/trunk/baseflight/obj/baseflight.hex}"
 #		lappend sources "{Baseflight/Robert} {http://afrodevices.googlecode.com/svn/branches/Robert/baseflight/obj/baseflight.hex}" ## brocken
 #		lappend sources "{Baseflight/Frog32} {https://raw.github.com/frog32/baseflight/master/obj/baseflight.hex}" ## ssl-only
-		lappend sources "{Baseflight/harakiri9-BFr279} {http://www.multixmedia.org/test/baseflight_harakiri.hex}"
+#		lappend sources "{Baseflight/harakiri9-BFr279} {http://www.multixmedia.org/test/baseflight_harakiri.hex}"
 		lappend sources "{from file} {file}"
 
 		set source_url [lindex [lindex $sources 0] 1]
@@ -2372,6 +2573,7 @@ der normale Weg einen reset/bootmode per CLI durchzuführen ist dann nicht mehr 
 
 		ttk::progressbar .note.flash.button.scale
 		pack .note.flash.button.scale -side top -expand no -fill x
+
 
 
 proc bits2int {bits} {
@@ -2420,6 +2622,18 @@ button .buttons.save2board -text "Save to Board" -command {
 					append bin $aux_bit($val,$val2)
 				}
 				serial_send $Serial "aux $val [bits2int $bin]"
+			}
+		}
+		catch {
+			foreach KEY [array names servo] {
+				set servo_save($KEY) $servo($KEY)
+			}
+			foreach servo_num "0 1 2 3 4 5 6 7" {
+				if {$servo_save($servo_num,rev) == 1} {
+					serial_send $Serial "servo $servo_num $servo_save($servo_num,min) $servo_save($servo_num,max) $servo_save($servo_num,center) -$servo_save($servo_num,drate)"
+				} else {
+					serial_send $Serial "servo $servo_num $servo_save($servo_num,min) $servo_save($servo_num,max) $servo_save($servo_num,center) $servo_save($servo_num,drate)"
+				}
 			}
 		}
 		.info configure -text "save: done"
@@ -2930,7 +3144,7 @@ proc xml_tag {tag cl selfcl props body}  {
 				set Description_new [string map $map $Description]
 				set map {\<BR\> \n}
 				set Description [string map $map $Description_new]
-#				puts "$Item,$Language=$Description"
+				puts "$Item,$Language=$Description"
 				set HELPTEXT([string toupper $Item],$Language) "$Description"
 			}
 		}
