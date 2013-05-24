@@ -3,6 +3,10 @@
 #
 #
 
+#####################################################################################
+# Images
+#####################################################################################
+
 image create photo mixers -data {
 R0lGODlhvAH0AeflAAMEAwACLBQBAAACMwACPAcGBhsBAAMGFgEHJgAERyMBAAAGVwsLCwILNhcL
 BCkGAQAJZzYHABAREBQUFAMRbQ0XLwgWUUcOAwIXdxoaGikXEDgVBAsVjAIZiCEcIAMbl0gXAwUc
@@ -1042,43 +1046,43 @@ BXuGhBnQgPMCKO9u7yxiQgMkDyAlwQ5N4AD54oAKbFICiIB2RskwjQ8I1GcRtdEZEKWNkoCQcS/+
 zuI07MIqMAIL/C8LEMEghMIsJNXFTIMttAIkHMIPkMAP/MAheIIqrF8JBQQAOw==
 }
 
+#####################################################################################
+# Global Variables
+#####################################################################################
+
 set baud 115200
 set baudrates "9600 38400 57600 115200"
-
-
-wm title . "MW32/NAZE32-Setup-Tool"
-wm minsize . 800 700
+set tabname(pid) "PID"
+set tabname(rc) "RC"
+set tabname(vbat) "VBAT"
+set tabname(pitchrollyaw) "Pitch/Roll/Yaw"
+set tabname(align) "Align"
+set tabname(accgyromag) "Acc/Gyro/Mag"
+set tabname(gps) "GPS"
+set tabname(alt) "Baro/Sonar"
+set tabname(nav) "Navigation"
+set tabname(gimbal) "Gimbal"
+set tabname(wing) "Wing"
+set tabname(tri) "Tricopter"
+set tabname(led) "LED"
+set tabname(etc) "ETC"
+set comports ""
+set Serial 0
+set buffer ""
+set channels ""
+set mixer_set ""
+set mixer_list ""
+set feature_enabled ""
+set feature_list ""
+set FlashSerial 0
+set FlashTimeout 0
+set OnlineHelp 1
+set HELPTEXT(loaded) 0
 
 
 #####################################################################################
-# Menu
+# GUI-Functions
 #####################################################################################
-
-menu .menu -tearoff 0
-
-menu .menu.help -tearoff 0
-	.menu add cascade -label "Help" -menu .menu.help -underline 0
-	.menu.help add command -label "Naze Harakiri Guide (DE)" -command {
-		launchBrowser "http://fdings.de/?q=tags/naze32"
-	}
-	.menu.help add command -label "Harakiri-Documentation (DE)" -command {
-		launchBrowser "http://docs.google.com/document/d/1SdKXVoVkYw7Mp-FBL1ctxKqW3_pqexEClJ0X-GNGAkg/edit?pli=1#"
-	}
-	.menu.help add command -label "Naze32-Documentation (DE)" -command {
-		launchBrowser "http://lazyzero.de/modellbau/multicoptersetup/naze32/start"
-	}
-	.menu.help add command -label "fpv-treff.de (Harakiri-Software)" -command {
-		launchBrowser "http://fpv-treff.de/viewtopic.php?f=18&t=1368"
-	}
-	.menu.help add command -label "test XML-Help..." -command {
-		show_help PPM
-	}
-	.menu.help add separator
-	.menu.help add command -label "About..." -command {
-		show_help_about
-	}
-
-. configure -menu .menu
 
 proc launchBrowser url {
 	global tcl_platform
@@ -1136,47 +1140,6 @@ proc show_help_about {} {
 	pack .help.exit -side bottom -expand no -fill x
 }
 
-
-
-set tabname(pid) "PID"
-set tabname(rc) "RC"
-set tabname(vbat) "VBAT"
-set tabname(pitchrollyaw) "Pitch/Roll/Yaw"
-set tabname(align) "Align"
-set tabname(accgyromag) "Acc/Gyro/Mag"
-set tabname(gps) "GPS"
-set tabname(alt) "Baro/Sonar"
-set tabname(nav) "Navigation"
-set tabname(gimbal) "Gimbal"
-set tabname(wing) "Wing"
-set tabname(tri) "Tricopter"
-set tabname(led) "LED"
-set tabname(etc) "ETC"
-
-set comports ""
-set Serial 0
-
-if {[string match "*Linux*" $tcl_platform(os)]} {
-	catch {set comports [glob /dev/ttyUSB*]}
-	set device "[lindex $comports end]"
-} elseif {[string match "*Windows*" $tcl_platform(os)]} {
-	set comports {"com1:" "com2:" "com3:" "com4:" "com5:" "com6:" "com7:" "com8:" "com9:" "com10:" "com11:" "com12:" "com13:" "com14:" "com15:"}
-	catch {
-		set serial_base "HKEY_LOCAL_MACHINE\\HARDWARE\\DEVICEMAP\\SERIALCOMM"
-		set values [registry values $serial_base]
-		set res {}
-		foreach valueName $values {
-			set PortName [registry get $serial_base $valueName]
-			lappend res "$PortName:"
-		}
-		set comports $res
-	}
-	set device "[lindex $comports end]"
-} elseif {[string match "*Darwin*" $tcl_platform(os)] || [string match "*MacOS*" $tcl_platform(os)]} {
-	catch {set comports [glob /dev/cu.*]}
-	set device "[lindex $comports end]"
-}
-
 proc disable_all {path} {
     catch {$path configure -state disabled}
     foreach child [winfo children $path] {
@@ -1190,6 +1153,385 @@ proc enable_all {path} {
         enable_all $child
     }
 }
+
+#####################################################################################
+# Flash-Functions
+#####################################################################################
+
+proc FirmwarefileDialog {w file} {
+	global Serial
+	global FlashSerial
+	global FlashTimeout
+	set types {
+		{"HEX files"		{.hex}	}
+		{"BIN files"		{.bin}	}
+		{"Text files"		{}		TEXT}
+		{"All files"		*}
+	}
+	if {$file == "file"} {
+		global selected_type
+		if {![info exists selected_type]} {
+			set selected_type "Tcl Scripts"
+		}
+		set file [tk_getOpenFile -filetypes $types -parent $w -typevariable selected_type]
+		puts "$file"
+	}
+	if {$file != ""} {
+		.info configure -text "flashfile: $file"
+		.info configure -background red
+		update
+		after 500
+		if {$Serial != 0} {
+			serial_send $Serial "exit"
+			after 2000
+			puts -nonewline $Serial "R"
+			flush $Serial
+			after 2000
+			catch {fileevent $Serial readable ""}
+			catch {close $Serial}
+			FlashFirmwareFile "$file"
+			.info configure -background lightgray
+			update
+			after 2000
+			connect_serial
+		} else {
+			FlashFirmwareFile "$file"
+			if {$FlashTimeout != 0} {
+				.info configure -background lightgray
+				.info configure -text "Try to connect first"
+				update
+				return
+			}
+			.info configure -background lightgray
+			update
+		}
+	}
+}
+
+proc FlashSerial_Init {ComPort ComRate} {
+	global FlashSerial
+	catch {close $FlashSerial}
+#	catch {fileevent $FlashSerial readable ""}
+	set iChannel 0
+	if {[catch {
+		set iChannel [open $ComPort w+]
+		fconfigure $iChannel -mode $ComRate,n,8,2 -translation binary -ttycontrol {RTS 1 DTR 0} -blocking FALSE
+#		fileevent $iChannel readable [list rd_chid $iChannel]
+		.info configure -text "FlashSerial-OK: $ComPort @ $ComRate"
+		update
+	}]} {
+		.info configure -text "FlashSerial-Error: $ComPort @ $ComRate"
+		update
+	}
+	return $iChannel
+}
+
+proc FlashSerial_Close {} {
+	global FlashSerial
+	catch {close $FlashSerial}
+}
+
+proc FlashWait_reply {} {
+	global FlashSerial
+	global FlashTimeout
+	set num 0
+	set ch [read $FlashSerial 1]
+	binary scan $ch c num
+	set counter 0
+	while {$num == 0 && $counter < 100} {
+		set ch [read $FlashSerial 1]
+		binary scan $ch c num
+		after 10
+		incr counter
+	}
+	if {$counter >= 100} {
+		.info configure -text "#### timeout ####"
+		set FlashTimeout 1
+		update
+		after 1000
+		return
+	}
+	binary scan $ch c num
+	set ret "[format 0x%x $num]"
+#	puts "< $ret"
+	if {$ret == "0x79"} {
+#		puts "ACK"
+	} elseif {$ret == "0x1f"} {
+		.info configure -text "NACK"
+		update
+		after 1000
+	} else {
+		.info configure -text "Unknown: $ret"
+		update
+	}
+}
+
+proc FlashInitChip {} {
+	global FlashSerial
+	.info configure -text "send init"
+	update
+	puts -nonewline $FlashSerial "[binary format c 0x7F]"
+	flush $FlashSerial
+	FlashWait_reply
+}
+
+proc FlashCmdGeneric {CMD} {
+	global FlashSerial
+	set CSUM [format 0x%x [expr $CMD ^ 0xFF]]
+#	puts "send cmd($CMD): $CSUM"
+	puts -nonewline $FlashSerial "[binary format c $CMD]"
+	puts -nonewline $FlashSerial "[binary format c $CSUM]"
+	flush $FlashSerial
+	FlashWait_reply
+}
+
+proc FlashCmdEraseMemory {} {
+	global FlashSerial
+	.info configure -text "erase flash"
+	update
+	FlashCmdGeneric "0x43"
+#	puts "send addr: 0xFF+0x00"
+	puts -nonewline $FlashSerial "[binary format c 0xFF]"
+	flush $FlashSerial
+	puts -nonewline $FlashSerial "[binary format c 0x00]"
+	flush $FlashSerial
+	FlashWait_reply
+}
+
+proc FlashSendData {START_ADDR BUFFER} {
+	global FlashSerial
+	FlashCmdGeneric 0x31
+	set ADDR_BYTE4 "0x[string range [format %x $START_ADDR] 5 6]"
+	set ADDR_BYTE3 "0x[string range [format %x $START_ADDR] 3 4]"
+	set ADDR_BYTE2 "0x[string range [format %x $START_ADDR] 1 2]"
+	set ADDR_BYTE1 "0x0[string range [format %x $START_ADDR] 0 0]"
+	set ADDR_CRC "[format 0x%x [expr $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4]]"
+#	puts "send_addr: $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4 -- $ADDR_CRC"
+#	puts "$START_ADDR - $BUFFER"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE1]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE2]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE3]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE4]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_CRC]"
+	flush $FlashSerial
+	FlashWait_reply
+	set LEN 256
+#	puts "send len: [format 0x%x [expr $LEN - 1]]"
+	puts -nonewline $FlashSerial "[binary format c "[format 0x%x [expr $LEN - 1]]"]"
+#	puts "send data..."
+	set NUM 0
+	set CRC "0xFF"
+	foreach BYTE $BUFFER {
+		set CRC [expr $CRC ^ $BYTE]
+#		puts -nonewline "$BYTE "
+#		puts "$NUM - $BYTE - [format 0x%x $CRC]"
+		puts -nonewline $FlashSerial "[binary format c $BYTE]"
+		flush $FlashSerial
+		incr NUM
+	}
+#	puts ""
+#	puts "send crc: [format 0x%x $CRC]"
+	puts -nonewline $FlashSerial "[binary format c "[format 0x%x $CRC]"]"
+	flush $FlashSerial
+	FlashWait_reply
+}
+
+proc FlashSendBIN {START_ADDR BINFILE} {
+	set binfile [open $BINFILE r]
+	fconfigure $binfile -translation binary
+	set file_data [read $binfile]
+	close $binfile
+	set BUFFER ""
+	set COUNT 0
+	if {$file_data != ""} {
+		set MAX_ADDR [expr [llength [split $file_data ""]] / 256 + $START_ADDR]
+		puts "# [format 0x%x $MAX_ADDR] #"
+
+		FlashCmdEraseMemory
+
+		foreach BYTE [split $file_data ""] {
+			binary scan $BYTE c num
+			if {$num < 0} {
+				set num [expr $num + 256]
+			}
+	#		puts "$COUNT [format 0x%x $num]"
+			lappend BUFFER "[format 0x%x $num]"
+			if {$COUNT == 255} {
+
+				.info configure -text "write: [format 0x%x $START_ADDR]"
+				.note.flash.button.scale configure -value [expr ($START_ADDR - 0x8000000) * 100 / ($MAX_ADDR - 0x8000000)]
+				update
+
+				FlashSendData $START_ADDR $BUFFER
+				incr START_ADDR 256
+				set BUFFER ""
+				set COUNT 0
+			} else {
+				incr COUNT
+			}
+		}
+		set NUM 0
+		while {$NUM < [expr 256 - $COUNT]} {
+			lappend BUFFER "0xFF"
+			incr NUM
+		}
+		FlashSendData $START_ADDR $BUFFER
+		.info configure -text "write: done"
+		.note.flash.button.scale configure -value 100
+		update
+
+	} else {
+		.info configure -text "error loading BIN-File"
+		update
+		after 1000
+	}
+}
+
+proc FlashSendHEX {START_ADDR HEXFILE} {
+	if {[string tolower [lindex [split $HEXFILE ":"] 0]] == "http"} {
+		set file_data [ getPage $HEXFILE ]
+	} else {
+		set hexfile [open $HEXFILE r]
+		set file_data [read $hexfile]
+		close $hexfile
+	}
+	if {[string range $file_data 0 4] == ":0200"} {
+		set BUFFER ""
+		set START_ADDR "0x8000000"
+
+		set MAX_ADDR $START_ADDR
+
+		foreach LINE $file_data {
+			set HEX_LEN  "[format %i "0x[string range $LINE 1 2]"]"
+			set HEX_ADDR "0x[string range $LINE 3 6]"
+			set HEX_TYPE "0x[string range $LINE 7 8]"
+			set HEX_DATA "[string range $LINE 9 [expr 9 + [expr $HEX_LEN * 2] - 1]]"
+			set HEX_CSUM "0x[string range $LINE [expr 9 + [expr $HEX_LEN * 2]] [expr 9 + [expr $HEX_LEN * 2] + 1]]"
+			set NUM 0
+			while {$NUM < [expr 16 - $HEX_LEN]} {
+				append HEX_DATA "00"
+				incr NUM
+			}
+			if {$HEX_TYPE == "0x00"} {
+				set START 0
+				set PART [string range $HEX_DATA $START [expr $START + 1]]
+				while {$PART != ""} {
+					lappend BUFFER "0x$PART"
+					set LEN "[llength $BUFFER]"
+					if {$LEN == 256} {
+						incr MAX_ADDR 256
+						set BUFFER ""
+					}
+					incr START +2
+					set PART [string range $HEX_DATA $START [expr $START + 1]]
+				}
+			}
+		}
+		incr MAX_ADDR 256
+
+		FlashCmdEraseMemory
+		set BUFFER ""
+		foreach LINE $file_data {
+			set HEX_LEN  "[format %i "0x[string range $LINE 1 2]"]"
+			set HEX_ADDR "0x[string range $LINE 3 6]"
+			set HEX_TYPE "0x[string range $LINE 7 8]"
+			set HEX_DATA "[string range $LINE 9 [expr 9 + [expr $HEX_LEN * 2] - 1]]"
+			set HEX_CSUM "0x[string range $LINE [expr 9 + [expr $HEX_LEN * 2]] [expr 9 + [expr $HEX_LEN * 2] + 1]]"
+			set NUM 0
+			while {$NUM < [expr 16 - $HEX_LEN]} {
+				append HEX_DATA "00"
+				incr NUM
+			}
+			if {$HEX_TYPE == "0x00"} {
+				set START 0
+				set PART [string range $HEX_DATA $START [expr $START + 1]]
+				while {$PART != ""} {
+					lappend BUFFER "0x$PART"
+					set LEN "[llength $BUFFER]"
+					if {$LEN == 256} {
+
+						.info configure -text "write: [format 0x%x $START_ADDR]"
+						.note.flash.button.scale configure -value [expr ($START_ADDR - 0x8000000) * 100 / ($MAX_ADDR - 0x8000000)]
+						update
+
+						FlashSendData $START_ADDR $BUFFER
+						incr START_ADDR 256
+						set BUFFER ""
+					}
+					incr START +2
+					set PART [string range $HEX_DATA $START [expr $START + 1]]
+				}
+			}
+		}
+	#	puts "## $LEN [expr 256 - $LEN] ##"
+		set NUM 0
+		while {$NUM < [expr 256 - $LEN]} {
+			lappend BUFFER "0xFF"
+			incr NUM
+		}
+	#	puts "[llength $BUFFER]"
+		FlashSendData $START_ADDR $BUFFER
+		.info configure -text "write: done"
+		.note.flash.button.scale configure -value 100
+		update
+	} else {
+		.info configure -text "error loading HEX-File"
+		update
+		after 1000
+	}
+}
+
+proc FlashResetSystem {START_ADDR} {
+	global FlashSerial
+	.info configure -text "booting firmware"
+	update
+	FlashCmdGeneric "0x21"
+	set ADDR_BYTE4 "0x[string range [format %x $START_ADDR] 5 6]"
+	set ADDR_BYTE3 "0x[string range [format %x $START_ADDR] 3 4]"
+	set ADDR_BYTE2 "0x[string range [format %x $START_ADDR] 1 2]"
+	set ADDR_BYTE1 "0x0[string range [format %x $START_ADDR] 0 0]"
+	set ADDR_CRC "[format 0x%x [expr $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4]]"
+#	puts "send_addr: $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4 -- $ADDR_CRC"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE1]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE2]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE3]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE4]"
+	puts -nonewline $FlashSerial "[binary format c $ADDR_CRC]"
+	flush $FlashSerial
+	FlashWait_reply
+}
+
+proc FlashFirmwareFile {FILE} {
+	global FlashSerial
+	global FlashTimeout
+	set START_ADDR "0x8000000"
+	set device [.device.spin get]
+	set FlashSerial [FlashSerial_Init $device 115200]
+	set FlashTimeout 0
+	FlashInitChip
+	if {$FlashTimeout != 0} {
+		return
+	}
+	if {[string tolower [lindex [split $FILE "."] end]] == "bin"} {
+		.info configure -text "Binary File"
+		update
+		FlashSendBIN $START_ADDR $FILE
+	} elseif {[string tolower [lindex [split $FILE "."] end]] == "hex"} {
+		.info configure -text "HEX File"
+		update
+		FlashSendHEX $START_ADDR $FILE
+	} else {
+		.info configure -text "Unknown File"
+		update
+	}
+	after 300
+	FlashResetSystem "0x8000000"
+	FlashSerial_Close
+}
+
+#####################################################################################
+# Serial-Functions
+#####################################################################################
 
 proc serial_send {Serial line} {
 	.info configure -text "send: $line"
@@ -1222,7 +1564,6 @@ proc Serial_Init {ComPort ComRate} {
 	return $iChannel
 }
 
-
 proc connect_serial {} {
 	global Serial
 	global mode
@@ -1231,6 +1572,7 @@ proc connect_serial {} {
 	global baud
 
 	.version configure -text "waiting......"
+	.mixer configure -text "waiting......"
 	.info configure -text "waiting......"
 	update
 
@@ -1297,31 +1639,6 @@ proc connect_serial {} {
 #	after 200
 }
 
-
-proc save_setting {var} {
-	global Serial
-	global settings
-	if {$Serial != 0} {
-		serial_send $Serial "set $var=$settings($var)"
-	} else {
-		.info configure -text "send: error, no serial connection"
-		update
-	}
-}
-
-set buffer ""
-set channels ""
-set mixer_set ""
-set mixer_list ""
-set feature_enabled ""
-set feature_list ""
-
-
-proc int2bits {i} {
-	binary scan [binary format I1 $i] B* x
-	split $x {}
-}
-
 proc rd_chid {chid} {
 	global buffer
 	global mode
@@ -1336,7 +1653,7 @@ proc rd_chid {chid} {
 	global aux
 	global aux_bit
 	global settings
-	global TABLE
+	global cmix_TABLE
 	global I2CDevices
 	global servo
 	if {$chid == 0} {
@@ -1690,6 +2007,7 @@ proc rd_chid {chid} {
 					}
 				} elseif {[string match "Current mixer:*" $buffer]} {
 					set mixer_set "[lindex $buffer 2]"
+					.mixer configure -text "Mixer: $mixer_set"
 				} elseif {[string match "Available mixers:*" $buffer]} {
 					set mixer_list "[lrange $buffer 2 end]"
 					catch {
@@ -1732,10 +2050,10 @@ proc rd_chid {chid} {
 					}
 				} elseif {[string match "#*:*" $buffer]} {
 					set NUM [expr [lindex [split $buffer "#:"] 1] - 1]
-					set TABLE($NUM,Throttle) [lindex [split $buffer "\t"] 1]
-					set TABLE($NUM,Roll) [lindex [split $buffer "\t"] 2]
-					set TABLE($NUM,Pitch) [lindex [split $buffer "\t"] 3]
-					set TABLE($NUM,Yaw) [lindex [split $buffer "\t"] 4]
+					set cmix_TABLE($NUM,Throttle) [lindex [split $buffer "\t"] 1]
+					set cmix_TABLE($NUM,Roll) [lindex [split $buffer "\t"] 2]
+					set cmix_TABLE($NUM,Pitch) [lindex [split $buffer "\t"] 3]
+					set cmix_TABLE($NUM,Yaw) [lindex [split $buffer "\t"] 4]
 				} elseif {[string match "aux *" $buffer]} {
 					set aux_num "[lindex $buffer 1]"
 					set aux_val "[lindex $buffer 2]"
@@ -1791,6 +2109,47 @@ proc rd_chid {chid} {
 			append buffer $ch
 		}
 #	}
+}
+
+proc comport_find {} {
+	global tcl_platform
+	global comports
+	global device
+	if {[string match "*Linux*" $tcl_platform(os)]} {
+		catch {set comports [glob /dev/ttyUSB*]}
+		set device "[lindex $comports end]"
+	} elseif {[string match "*Windows*" $tcl_platform(os)]} {
+		set comports {"com1:" "com2:" "com3:" "com4:" "com5:" "com6:" "com7:" "com8:" "com9:" "com10:" "com11:" "com12:" "com13:" "com14:" "com15:"}
+		catch {
+			set serial_base "HKEY_LOCAL_MACHINE\\HARDWARE\\DEVICEMAP\\SERIALCOMM"
+			set values [registry values $serial_base]
+			set res {}
+			foreach valueName $values {
+				set PortName [registry get $serial_base $valueName]
+				lappend res "$PortName:"
+			}
+			set comports $res
+		}
+		set device "[lindex $comports end]"
+	} elseif {[string match "*Darwin*" $tcl_platform(os)] || [string match "*MacOS*" $tcl_platform(os)]} {
+		catch {set comports [glob /dev/cu.*]}
+		set device "[lindex $comports end]"
+	}
+}
+
+#####################################################################################
+# File-Functions
+#####################################################################################
+
+proc save_setting {var} {
+	global Serial
+	global settings
+	if {$Serial != 0} {
+		serial_send $Serial "set $var=$settings($var)"
+	} else {
+		.info configure -text "send: error, no serial connection"
+		update
+	}
 }
 
 proc fileDialog {w operation} {
@@ -1885,9 +2244,451 @@ proc fileDialog {w operation} {
 	}
 }
 
+#####################################################################################
+# cMix-Functions
+#####################################################################################
+
+proc cmix_init {} {
+	global cmix_TABLE
+	set cmix_TABLE(SUM,Roll) 0
+	set cmix_TABLE(SUM,Pitch) 0
+	set cmix_TABLE(SUM,Yaw) 0
+	set cmix_TABLE(SUM,Motors) 0
+	foreach MOTOR {0 1 2 3 4 5 6 7} {
+		set cmix_TABLE($MOTOR,Throttle) 0
+		set cmix_TABLE($MOTOR,Pitch) 0
+		set cmix_TABLE($MOTOR,Roll) 0
+		set cmix_TABLE($MOTOR,Yaw) 0
+		set cmix_TABLE($MOTOR,Port) [expr $MOTOR + 1]
+	}
+	set cmix_TABLE(0,Throttle) 30
+	set cmix_TABLE(0,Pitch) 16
+	set cmix_TABLE(0,Roll) -22
+	set cmix_TABLE(0,Yaw) -32
+	set cmix_TABLE(1,Throttle) 30
+	set cmix_TABLE(1,Pitch) 16
+	set cmix_TABLE(1,Roll) 22
+	set cmix_TABLE(1,Yaw) 32
+	set cmix_TABLE(2,Throttle) 30
+	set cmix_TABLE(2,Pitch) -32
+	set cmix_TABLE(2,Roll) 0
+	set cmix_TABLE(2,Yaw) -32
+	set cmix_TABLE(3,Throttle) 32
+	set cmix_TABLE(3,Pitch) 16
+	set cmix_TABLE(3,Roll) -22
+	set cmix_TABLE(3,Yaw) 32
+	set cmix_TABLE(4,Throttle) 32
+	set cmix_TABLE(4,Pitch) 16
+	set cmix_TABLE(4,Roll) 22
+	set cmix_TABLE(4,Yaw) -32
+	set cmix_TABLE(5,Throttle) 32
+	set cmix_TABLE(5,Pitch) -32
+	set cmix_TABLE(5,Roll) 0
+	set cmix_TABLE(5,Yaw) 32
+	set cmix_TABLE(6,Throttle) 0
+	set cmix_TABLE(6,Pitch) 0
+	set cmix_TABLE(6,Roll) 0
+	set cmix_TABLE(6,Yaw) 0
+	set cmix_TABLE(7,Throttle) 0
+	set cmix_TABLE(7,Pitch) 0
+	set cmix_TABLE(7,Roll) 0
+	set cmix_TABLE(7,Yaw) 0
+	foreach MOTOR {0 1 2 3 4 5 6 7} {
+		cmix_draw_table_line $MOTOR
+	}
+}
+
+proc cmix_plotDown {w x y} {
+	global cmix_plot
+	$w dtag selected
+	$w addtag selected withtag current
+	$w raise current
+	set cmix_plot(lastX) $x
+	set cmix_plot(lastY) $y
+}
+
+proc cmix_plotRev {w} {
+	global cmix_TABLE
+	global cmix_plot
+	foreach TAG [$w gettags current] {
+		if {[string match "motor_*" $TAG]} {
+			set NUM [lindex [split $TAG "_"] 1]
+			set cmix_TABLE($NUM,Yaw) [expr $cmix_TABLE($NUM,Yaw) * -1]
+		}
+	}
+	cmix_update_table
+}
+
+proc cmix_plotUp {w x y} {
+	global cmix_TABLE
+	global cmix_plot
+	$w move selected [expr {$x-$cmix_plot(lastX)}] [expr {$y-$cmix_plot(lastY)}]
+	set cmix_plot(lastX) $x
+	set cmix_plot(lastY) $y
+	set MAX "[cmix_get_max]"
+
+	set X [expr ([lindex [$w coords selected] 0] + 40 - 250) * $MAX / 200]
+	set Y [expr ([lindex [$w coords selected] 1] + 40 - 250) * $MAX / 200]
+
+	foreach TAG [$w gettags selected] {
+		if {[string match "motor_*" $TAG]} {
+			set NUM [lindex [split $TAG "_"] 1]
+			if {$X > 100} {
+				set X 100
+			} elseif {$X < -100} {
+				set X -<100
+			}
+			if {$Y > 100} {
+				set Y 100
+			} elseif {$Y < -100} {
+				set Y -100
+			}
+			set cmix_TABLE($NUM,Roll) $X
+			set cmix_TABLE($NUM,Pitch) $Y 
+		}
+	}
+}
+
+proc cmix_plotMove {w x y} {
+	global cmix_TABLE
+	global cmix_plot
+	$w move selected [expr {$x-$cmix_plot(lastX)}] [expr {$y-$cmix_plot(lastY)}]
+	set cmix_plot(lastX) $x
+	set cmix_plot(lastY) $y
+}
+
+proc cmix_allRev {} {
+	global cmix_TABLE
+	foreach MOTOR {0 1 2 3 4 5 6 7} {
+		set cmix_TABLE($MOTOR,Yaw) [expr $cmix_TABLE($MOTOR,Yaw) * -1]
+	}
+}
+
+proc cmix_get_max {} {
+	global cmix_TABLE
+	set MAX 0
+	foreach MOTOR {0 1 2 3 4 5 6 7} {
+		if {![catch {set X $cmix_TABLE($MOTOR,Roll); set Y $cmix_TABLE($MOTOR,Pitch); set Z $cmix_TABLE($MOTOR,Yaw); set A $cmix_TABLE($MOTOR,Throttle)}]} {
+			if {$X < 0} {
+				set X [expr $X * -1] 
+			}
+			if {$Y < 0} {
+				set Y [expr $Y * -1] 
+			}
+			if {$Z < 0} {
+				set Z [expr $Z * -1] 
+			}
+			if {$A < 0} {
+				set A [expr $A * -1] 
+			}
+			if {$X > $MAX} {
+				set MAX $X
+			}
+			if {$Y > $MAX} {
+				set MAX $Y
+			}
+			if {$Z > $MAX} {
+				set MAX $Z
+			}
+			if {$A > $MAX} {
+				set MAX $A
+			}
+		}
+	}
+	return $MAX
+}
+
+proc cmix_draw_table_line {NUM} {
+	frame .note.cmixer.table.motor$NUM
+	pack .note.cmixer.table.motor$NUM -expand yes -fill x
+
+		label .note.cmixer.table.motor$NUM.num -text "Motor: [expr $NUM + 1]" -width 10
+		pack .note.cmixer.table.motor$NUM.num -side left -expand yes -fill x
+
+		entry .note.cmixer.table.motor$NUM.pitch -textvariable cmix_TABLE($NUM,Pitch) -width 10
+		pack .note.cmixer.table.motor$NUM.pitch -side left -expand yes -fill x
+
+		entry .note.cmixer.table.motor$NUM.roll -textvariable cmix_TABLE($NUM,Roll) -width 10
+		pack .note.cmixer.table.motor$NUM.roll -side left -expand yes -fill x
+
+		entry .note.cmixer.table.motor$NUM.yaw -textvariable cmix_TABLE($NUM,Yaw) -width 10
+		pack .note.cmixer.table.motor$NUM.yaw -side left -expand yes -fill x
+
+		entry .note.cmixer.table.motor$NUM.throttle -textvariable cmix_TABLE($NUM,Throttle) -width 10
+		pack .note.cmixer.table.motor$NUM.throttle -side left -expand yes -fill x
+
+		ttk::combobox .note.cmixer.table.motor$NUM.port -textvariable cmix_TABLE($NUM,Port) -state readonly -values {1 2 3 4 5 6 7 8} -width 10
+		pack .note.cmixer.table.motor$NUM.port -side left -expand yes -fill x
+}
+
+proc cmix_draw_rotor {TEXT X Y Z} {
+	if {$X == 0 && $Y == 0} {
+		return
+	}
+	set Z_OFFSET 2
+	set X [expr $X * 2]
+	set Y [expr $Y * 2]
+	set Z [expr $Z * 2]
+	.note.cmixer.canvas create line [expr 250 + $X] [expr 250 + $Y] 250 250 -fill gray -tags "fg"
+	.note.cmixer.canvas create oval [expr 250 - 40 + $X] [expr 250 - 40 + $Y] [expr 250 + 40 + $X] [expr 250 + 40 + $Y] -outline gray -tags "fg"
+	if {$Z < 0} {
+		.note.cmixer.canvas create oval [expr 250 - 40 + $X + $Z_OFFSET] [expr 250 - 40 + $Y + $Z_OFFSET] [expr 250 + 40 + $X + $Z_OFFSET] [expr 250 + 40 + $Y + $Z_OFFSET] -outline yellow -tags "fg rotor motor_$TEXT"
+		.note.cmixer.canvas create line [expr 250 - 2 + $X + $Z_OFFSET] [expr 250 - 40 + $Y + $Z_OFFSET] [expr 250 + 2 + $X + $Z_OFFSET] [expr 250 - 40 + $Y + $Z_OFFSET] -fill yellow -tags "fg" -arrow first
+		.note.cmixer.canvas create text [expr 250 + $X] [expr 250 + $Y + 6] -text "$TEXT (CCW)" -fill yellow -tags "fg"
+	} else {
+		.note.cmixer.canvas create oval [expr 250 - 40 + $X - $Z_OFFSET] [expr 250 - 40 + $Y - $Z_OFFSET] [expr 250 + 40 + $X - $Z_OFFSET] [expr 250 + 40 + $Y - $Z_OFFSET] -outline green -tags "fg rotor motor_$TEXT"
+		.note.cmixer.canvas create line [expr 250 - 2 + $X - $Z_OFFSET] [expr 250 - 40 + $Y - $Z_OFFSET] [expr 250 + 2 + $X - $Z_OFFSET] [expr 250 - 40 + $Y - $Z_OFFSET] -fill green -tags "fg" -arrow last
+		.note.cmixer.canvas create text [expr 250 + $X] [expr 250 + $Y - 6] -text "$TEXT (CW)" -fill green -tags "fg"
+	}
+}
+
+proc cmix_update_table {} {
+	global cmix_TABLE
+	.note.cmixer.canvas delete "fg"
+	catch {
+		set MAX "[cmix_get_max]"
+		set cmix_TABLE(SUM,Roll) 0
+		set cmix_TABLE(SUM,Pitch) 0
+		set cmix_TABLE(SUM,Yaw) 0
+		set cmix_TABLE(SUM,Motors) 0
+		foreach MOTOR {0 1 2 3 4 5 6 7} {
+			if {![catch {set X $cmix_TABLE($MOTOR,Roll); set Y $cmix_TABLE($MOTOR,Pitch); set Z $cmix_TABLE($MOTOR,Yaw)}]} {
+				if {$X != 0 || $Y != 0 || $Z != 0} {
+					cmix_draw_rotor $MOTOR [expr 100 * $X / $MAX] [expr 100 * $Y / $MAX] [expr 100 * $Z / $MAX]
+					set cmix_TABLE(SUM,Roll) [expr $cmix_TABLE(SUM,Roll) + $X]
+					set cmix_TABLE(SUM,Pitch) [expr $cmix_TABLE(SUM,Pitch) + $Y]
+					set cmix_TABLE(SUM,Yaw) [expr $cmix_TABLE(SUM,Yaw) + $Z]
+					incr cmix_TABLE(SUM,Motors)
+				}
+			}
+		}
+		.note.cmixer.canvas create oval [expr 250 - 20] [expr 250 - 20] [expr 250 + 20] [expr 250 + 20] -outline gray -tags "fg center" -fill gray
+
+		if {$cmix_TABLE(SUM,Pitch) != 0} {
+			.note.cmixer.table.sum.pitch configure -fg red
+		} else {
+			.note.cmixer.table.sum.pitch configure -fg black
+		}
+		if {$cmix_TABLE(SUM,Roll) != 0} {
+			.note.cmixer.table.sum.roll configure -fg red
+		} else {
+			.note.cmixer.table.sum.roll configure -fg black
+		}
+		if {$cmix_TABLE(SUM,Yaw) != 0} {
+			.note.cmixer.table.sum.yaw configure -fg red
+		} else {
+			.note.cmixer.table.sum.yaw configure -fg black
+		}
+	}
+}
+
+proc cmix_load_mixerfile {file} {
+	global cmix_TABLE
+	set cmix_TABLE(SUM,Roll) 0
+	set cmix_TABLE(SUM,Pitch) 0
+	set cmix_TABLE(SUM,Yaw) 0
+	set cmix_TABLE(SUM,Motors) 0
+	foreach MOTOR {0 1 2 3 4 5 6 7} {
+		set cmix_TABLE($MOTOR,Throttle) 0
+		set cmix_TABLE($MOTOR,Pitch) 0
+		set cmix_TABLE($MOTOR,Roll) 0
+		set cmix_TABLE($MOTOR,Yaw) 0
+		set cmix_TABLE($MOTOR,Port) [expr $MOTOR + 1]
+	}
+	if {[string match "*mkm" $file] || [string match "*.mix" $file]} {
+		set fp [open [lindex $file 0] r]
+		set file_data [read $fp]
+		close $fp
+		set MODE ""
+		foreach line [split $file_data "\n"] {
+			if {[string match "\\\[*\\\]" $line]} {
+				set MODE "[lindex [split $line "\[\]"] 1]"
+				if {$MODE == "Nick"} {
+					set MODE "Pitch"
+				} elseif {$MODE == "Gas"} {
+					set MODE "Throttle"
+				}
+			} elseif {[string match "Motors=*" $line]} {
+			} elseif {[string match "Motor*=*" $line]} {
+				set NUM [expr [string trim [lindex [split $line "="] 0] "Motor"] - 1]
+				set VAL [lindex [split $line "="] 1]
+				set cmix_TABLE($NUM,$MODE) $VAL
+			}
+		}
+	} elseif {[string match "*bfm" $file] || [string match "*cmix" $file]} {
+		set fp [open [lindex $file 0] r]
+		set file_data [read $fp]
+		close $fp
+		foreach line [split $file_data "\n"] {
+			if {[string match "#*:*" $line]} {
+				set NUM [expr [lindex [split $line "#:"] 1] - 1]
+				set cmix_TABLE($NUM,Throttle) [lindex $line 2]
+				set cmix_TABLE($NUM,Roll) [lindex $line 3]
+				set cmix_TABLE($NUM,Pitch) [lindex $line 4]
+				set cmix_TABLE($NUM,Yaw) [lindex $line 5]
+			}
+		}
+	}
+	cmix_update_table
+}
+
+proc cmix_open_mixerfile {} {
+	set types {
+		{"Text files"		{.mix} }
+		{"Text files"		{.mkm} }
+		{"Text files"		{} TEXT}
+		{"All files"		*}
+	}
+	global selected_type
+	if {![info exists selected_type]} {
+		set selected_type "Tcl Scripts"
+	}
+	set file [tk_getOpenFile -filetypes $types -parent . -typevariable selected_type]
+	if {$file != ""} {
+		cmix_load_mixerfile $file
+	}
+}
+
+proc cmix_watch {varname key op} {
+	if {! [string match "SUM,*" $key]} {
+		cmix_update_table
+	}
+}
+
+#####################################################################################
+# XmlHelp-Function
+#####################################################################################
+
+proc xml_tag {tag cl selfcl props body}  {
+	global OnlineHelp
+	global Item
+	global Description
+	global Language
+	global HELPTEXT
+	if {$tag == "OnlineHelp"} {
+		if {$cl == "0"} {
+			set HELPTEXT(loaded) 1
+			set OnlineHelp 0
+			set Item ""
+			set Description ""
+			set Language ""
+		} else {
+			set OnlineHelp 1
+			if {$Description != ""} {
+				set map {Ã¤ ä Ã Ä Ã¼ ü Ã¼ Ü Ã¶ ö Ã Ö Ã ß &lt; < &gt; > <BR> \n}
+				set Description_new [string map $map $Description]
+				set map {\<BR\> \n}
+				set Description [string map $map $Description_new]
+#				puts "$Item,$Language=$Description"
+				set HELPTEXT([string toupper $Item],$Language) "$Description"
+			}
+		}
+	}
+	if {$OnlineHelp == "0" && $cl == "0"} {
+		if {$tag == "Item"} {
+			set Item "$body"
+		} elseif {$tag == "Description"} {
+			set Description "$body"
+		} elseif {$tag == "Language"} {
+			set Language "$body"
+		}
+	}
+}
+
+proc xml_parse {cmd xml {start docstart}} {
+	regsub -all \{ $xml {\&ob;} xml
+	regsub -all \} $xml {\&cb;} xml
+	set exp {<(/?)([^\s/>]+)\s*([^/>]*)(/?)>}
+	set sub "\}\n$cmd {\\2} \[expr \{{\\1} ne \"\"\}\] \[expr \{{\\4} ne \"\"\}\] \
+		\[regsub -all -- \{\\s+|(\\s*=\\s*)\} {\\3} \" \"\] \{"
+	regsub -all $exp $xml $sub xml
+	eval "$cmd {$start} 0 0 {} \{ $xml \}"
+	eval "$cmd {$start} 1 1 {} {}"
+}
+
+proc show_help {SEARCH} {
+	global HELPTEXT
+	if {$HELPTEXT(loaded) == 0} {
+		set xml_data [getPage "http://www.klick-punkte.info/download/help.xml"]
+		if {$xml_data != ""} {
+			xml_parse xml_tag $xml_data
+		}
+	}
+	if {[info exists HELPTEXT($SEARCH,DE)]} {
+		tk_dialog .dialog1 "Help: $SEARCH" "$HELPTEXT($SEARCH,DE)" info 0 OK
+	} else {
+		tk_dialog .dialog1 "Help: $SEARCH" "no help for: $SEARCH" info 0 OK
+	}
+}
+
+#####################################################################################
+# Misc-Functions
+#####################################################################################
+
+catch {package require http}
+
+proc getPage { url } {
+	.info configure -text "Downloading file: $url"
+	update
+	return [ ::http::data [ ::http::geturl $url ] ]
+}
+
+proc int2bits {i} {
+	binary scan [binary format I1 $i] B* x
+	split $x {}
+}
+
+proc bits2int {bits} {
+	set bits [format %032s [join $bits {}]]
+	binary scan [binary format B* $bits] I1 x
+	set x
+}
+
+
+#####################################################################################
+# GUI
+#####################################################################################
+
+wm title . "Baseflight-Tool (CLI-Frontend)"
+wm minsize . 800 700
+
+
+
+#####################################################################################
+# Menu
+#####################################################################################
+
+menu .menu -tearoff 0
+menu .menu.help -tearoff 0
+	.menu add cascade -label "Help" -menu .menu.help -underline 0
+	.menu.help add command -label "Naze Harakiri Guide (DE)" -command {
+		launchBrowser "http://fdings.de/?q=tags/naze32"
+	}
+	.menu.help add command -label "Harakiri-Documentation (DE)" -command {
+		launchBrowser "http://docs.google.com/document/d/1SdKXVoVkYw7Mp-FBL1ctxKqW3_pqexEClJ0X-GNGAkg/edit?pli=1#"
+	}
+	.menu.help add command -label "Naze32-Documentation (DE)" -command {
+		launchBrowser "http://lazyzero.de/modellbau/multicoptersetup/naze32/start"
+	}
+	.menu.help add command -label "fpv-treff.de (Harakiri-Software)" -command {
+		launchBrowser "http://fpv-treff.de/viewtopic.php?f=18&t=1368"
+	}
+	.menu.help add command -label "test XML-Help..." -command {
+		show_help PPM
+	}
+	.menu.help add separator
+	.menu.help add command -label "About..." -command {
+		show_help_about
+	}
+
+	. configure -menu .menu
+
 
 label .version -text "Version: $tcl_platform(os)/$tcl_platform(osVersion)"
 pack .version -side top -expand no -fill x
+
+label .mixer -text "Mixer: ---"
+pack .mixer -side top -expand no -fill x
 
 label .sensors -text "Sensors: ---"
 pack .sensors -side top -expand no -fill x
@@ -1897,6 +2698,8 @@ pack .device -side top -expand no -fill x
 
 	label .device.label -text "Port" -width 10
 	pack .device.label -side top -expand yes -fill x
+
+	comport_find
 
 	if {[catch {ttk::combobox .device.spin -textvariable device -state readonly -values $comports}]} {
 		spinbox .device.spin -values $comports -width 10  -textvariable device
@@ -2004,431 +2807,113 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 	ttk::frame .note.cmixer
 	.note add .note.cmixer -text "Custom-Mixer"
 
-set TABLE(SUM,Roll) 0
-set TABLE(SUM,Pitch) 0
-set TABLE(SUM,Yaw) 0
-set TABLE(SUM,Motors) 0
-foreach MOTOR {0 1 2 3 4 5 6 7} {
-	set TABLE($MOTOR,Throttle) 0
-	set TABLE($MOTOR,Pitch) 0
-	set TABLE($MOTOR,Roll) 0
-	set TABLE($MOTOR,Yaw) 0
-	set TABLE($MOTOR,Port) [expr $MOTOR + 1]
-}
+		canvas .note.cmixer.canvas -relief raised -width 500 -height 500
+		pack .note.cmixer.canvas -side left
 
-set TABLE(0,Throttle) 30
-set TABLE(0,Pitch) 16
-set TABLE(0,Roll) -22
-set TABLE(0,Yaw) -32
-set TABLE(1,Throttle) 30
-set TABLE(1,Pitch) 16
-set TABLE(1,Roll) 22
-set TABLE(1,Yaw) 32
-set TABLE(2,Throttle) 30
-set TABLE(2,Pitch) -32
-set TABLE(2,Roll) 0
-set TABLE(2,Yaw) -32
-set TABLE(3,Throttle) 32
-set TABLE(3,Pitch) 16
-set TABLE(3,Roll) -22
-set TABLE(3,Yaw) 32
-set TABLE(4,Throttle) 32
-set TABLE(4,Pitch) 16
-set TABLE(4,Roll) 22
-set TABLE(4,Yaw) -32
-set TABLE(5,Throttle) 32
-set TABLE(5,Pitch) -32
-set TABLE(5,Roll) 0
-set TABLE(5,Yaw) 32
-set TABLE(6,Throttle) 0
-set TABLE(6,Pitch) 0
-set TABLE(6,Roll) 0
-set TABLE(6,Yaw) 0
-set TABLE(7,Throttle) 0
-set TABLE(7,Pitch) 0
-set TABLE(7,Roll) 0
-set TABLE(7,Yaw) 0
+		.note.cmixer.canvas create rec 1 1 500 500 -fill black -tags "bg"
+
+		frame .note.cmixer.table
+		pack .note.cmixer.table -expand yes -fill both
+
+		frame .note.cmixer.table.title
+		pack .note.cmixer.table.title -expand yes -fill both
+
+			label .note.cmixer.table.title.motor -text "Motor" -width 10
+			pack .note.cmixer.table.title.motor -side left -expand yes -fill x
+
+			label .note.cmixer.table.title.pitch -text "Pitch" -width 10
+			pack .note.cmixer.table.title.pitch -side left -expand yes -fill x
+
+			label .note.cmixer.table.title.roll -text "Roll" -width 10
+			pack .note.cmixer.table.title.roll -side left -expand yes -fill x
+
+			label .note.cmixer.table.title.yaw -text "Yaw" -width 10
+			pack .note.cmixer.table.title.yaw -side left -expand yes -fill x
+
+			label .note.cmixer.table.title.throttle -text "Throttle" -width 10
+			pack .note.cmixer.table.title.throttle -side left -expand yes -fill x
 
 
-proc plotDown {w x y} {
-	global plot
-	$w dtag selected
-	$w addtag selected withtag current
-	$w raise current
-	set plot(lastX) $x
-	set plot(lastY) $y
-}
+		frame .note.cmixer.table.sum
+		pack .note.cmixer.table.sum -expand yes -fill x
 
-proc plotRev {w} {
-	global TABLE
-	global plot
-	foreach TAG [$w gettags current] {
-		if {[string match "motor_*" $TAG]} {
-			set NUM [lindex [split $TAG "_"] 1]
-			set TABLE($NUM,Yaw) [expr $TABLE($NUM,Yaw) * -1]
-		}
-	}
-	update_table
-}
+			label .note.cmixer.table.sum.motor -text "Check" -width 10
+			pack .note.cmixer.table.sum.motor -side left -expand yes -fill x
 
-proc plotUp {w x y} {
-	global TABLE
-	global plot
-	$w move selected [expr {$x-$plot(lastX)}] [expr {$y-$plot(lastY)}]
-	set plot(lastX) $x
-	set plot(lastY) $y
-	set MAX "[get_max]"
+			label .note.cmixer.table.sum.pitch -text "" -textvariable cmix_TABLE(SUM,Pitch) -width 10
+			pack .note.cmixer.table.sum.pitch -side left -expand yes -fill x
 
-	set X [expr ([lindex [$w coords selected] 0] + 40 - 250) * $MAX / 200]
-	set Y [expr ([lindex [$w coords selected] 1] + 40 - 250) * $MAX / 200]
+			label .note.cmixer.table.sum.roll -text "" -textvariable cmix_TABLE(SUM,Roll) -width 10
+			pack .note.cmixer.table.sum.roll -side left -expand yes -fill x
 
-	foreach TAG [$w gettags selected] {
-		if {[string match "motor_*" $TAG]} {
-			set NUM [lindex [split $TAG "_"] 1]
-			if {$X > 100} {
-				set X 100
-			} elseif {$X < -100} {
-				set X -<100
+			label .note.cmixer.table.sum.yaw -text "" -textvariable cmix_TABLE(SUM,Yaw) -width 10
+			pack .note.cmixer.table.sum.yaw -side left -expand yes -fill x
+
+			label .note.cmixer.table.sum.throttle -text "---" -width 10
+			pack .note.cmixer.table.sum.throttle -side left -expand yes -fill x
+
+
+		frame .note.cmixer.table.motors
+		pack .note.cmixer.table.motors -expand yes -fill x
+
+			label .note.cmixer.table.motors.label -text "Num Motors:" -width 10
+			pack .note.cmixer.table.motors.label -side left -expand no -fill none
+
+			label .note.cmixer.table.motors.num -text "0" -width 10 -textvariable cmix_TABLE(SUM,Motors)
+			pack .note.cmixer.table.motors.num -side left -expand no -fill none
+
+		frame .note.cmixer.buttons
+		pack .note.cmixer.buttons -expand no -fill x -side bottom
+
+			button .note.cmixer.buttons.load -text "Load from File" -command {
+				cmix_open_mixerfile
 			}
-			if {$Y > 100} {
-				set Y 100
-			} elseif {$Y < -100} {
-				set Y -100
-			}
-			set TABLE($NUM,Roll) $X
-			set TABLE($NUM,Pitch) $Y 
-		}
-	}
-}
+			pack .note.cmixer.buttons.load -side left -expand yes -fill x
 
-proc plotMove {w x y} {
-	global TABLE
-	global plot
-	$w move selected [expr {$x-$plot(lastX)}] [expr {$y-$plot(lastY)}]
-	set plot(lastX) $x
-	set plot(lastY) $y
-}
-
-proc allRev {} {
-	global TABLE
-	foreach MOTOR {0 1 2 3 4 5 6 7} {
-		set TABLE($MOTOR,Yaw) [expr $TABLE($MOTOR,Yaw) * -1]
-	}
-}
-
-proc get_max {} {
-	global TABLE
-	set MAX 0
-	foreach MOTOR {0 1 2 3 4 5 6 7} {
-		if {![catch {set X $TABLE($MOTOR,Roll); set Y $TABLE($MOTOR,Pitch); set Z $TABLE($MOTOR,Yaw); set A $TABLE($MOTOR,Throttle)}]} {
-			if {$X < 0} {
-				set X [expr $X * -1] 
-			}
-			if {$Y < 0} {
-				set Y [expr $Y * -1] 
-			}
-			if {$Z < 0} {
-				set Z [expr $Z * -1] 
-			}
-			if {$A < 0} {
-				set A [expr $A * -1] 
-			}
-			if {$X > $MAX} {
-				set MAX $X
-			}
-			if {$Y > $MAX} {
-				set MAX $Y
-			}
-			if {$Z > $MAX} {
-				set MAX $Z
-			}
-			if {$A > $MAX} {
-				set MAX $A
-			}
-		}
-	}
-	return $MAX
-}
-
-proc draw_table_line {NUM} {
-	frame .note.cmixer.table.motor$NUM
-	pack .note.cmixer.table.motor$NUM -expand yes -fill x
-
-		label .note.cmixer.table.motor$NUM.num -text "Motor: [expr $NUM + 1]" -width 10
-		pack .note.cmixer.table.motor$NUM.num -side left -expand yes -fill x
-
-		entry .note.cmixer.table.motor$NUM.pitch -textvariable TABLE($NUM,Pitch) -width 10
-		pack .note.cmixer.table.motor$NUM.pitch -side left -expand yes -fill x
-
-		entry .note.cmixer.table.motor$NUM.roll -textvariable TABLE($NUM,Roll) -width 10
-		pack .note.cmixer.table.motor$NUM.roll -side left -expand yes -fill x
-
-		entry .note.cmixer.table.motor$NUM.yaw -textvariable TABLE($NUM,Yaw) -width 10
-		pack .note.cmixer.table.motor$NUM.yaw -side left -expand yes -fill x
-
-		entry .note.cmixer.table.motor$NUM.throttle -textvariable TABLE($NUM,Throttle) -width 10
-		pack .note.cmixer.table.motor$NUM.throttle -side left -expand yes -fill x
-
-		ttk::combobox .note.cmixer.table.motor$NUM.port -textvariable TABLE($NUM,Port) -state readonly -values {1 2 3 4 5 6 7 8} -width 10
-		pack .note.cmixer.table.motor$NUM.port -side left -expand yes -fill x
-}
-
-proc draw_rotor {TEXT X Y Z} {
-	if {$X == 0 && $Y == 0} {
-		return
-	}
-	set Z_OFFSET 2
-	set X [expr $X * 2]
-	set Y [expr $Y * 2]
-	set Z [expr $Z * 2]
-	.note.cmixer.canvas create line [expr 250 + $X] [expr 250 + $Y] 250 250 -fill gray -tags "fg"
-	.note.cmixer.canvas create oval [expr 250 - 40 + $X] [expr 250 - 40 + $Y] [expr 250 + 40 + $X] [expr 250 + 40 + $Y] -outline gray -tags "fg"
-	if {$Z < 0} {
-		.note.cmixer.canvas create oval [expr 250 - 40 + $X + $Z_OFFSET] [expr 250 - 40 + $Y + $Z_OFFSET] [expr 250 + 40 + $X + $Z_OFFSET] [expr 250 + 40 + $Y + $Z_OFFSET] -outline yellow -tags "fg rotor motor_$TEXT"
-		.note.cmixer.canvas create line [expr 250 - 2 + $X + $Z_OFFSET] [expr 250 - 40 + $Y + $Z_OFFSET] [expr 250 + 2 + $X + $Z_OFFSET] [expr 250 - 40 + $Y + $Z_OFFSET] -fill yellow -tags "fg" -arrow first
-		.note.cmixer.canvas create text [expr 250 + $X] [expr 250 + $Y + 6] -text "$TEXT (CCW)" -fill yellow -tags "fg"
-	} else {
-		.note.cmixer.canvas create oval [expr 250 - 40 + $X - $Z_OFFSET] [expr 250 - 40 + $Y - $Z_OFFSET] [expr 250 + 40 + $X - $Z_OFFSET] [expr 250 + 40 + $Y - $Z_OFFSET] -outline green -tags "fg rotor motor_$TEXT"
-		.note.cmixer.canvas create line [expr 250 - 2 + $X - $Z_OFFSET] [expr 250 - 40 + $Y - $Z_OFFSET] [expr 250 + 2 + $X - $Z_OFFSET] [expr 250 - 40 + $Y - $Z_OFFSET] -fill green -tags "fg" -arrow last
-		.note.cmixer.canvas create text [expr 250 + $X] [expr 250 + $Y - 6] -text "$TEXT (CW)" -fill green -tags "fg"
-	}
-}
-
-proc update_table {} {
-	global TABLE
-	.note.cmixer.canvas delete "fg"
-	catch {
-		set MAX "[get_max]"
-		set TABLE(SUM,Roll) 0
-		set TABLE(SUM,Pitch) 0
-		set TABLE(SUM,Yaw) 0
-		set TABLE(SUM,Motors) 0
-		foreach MOTOR {0 1 2 3 4 5 6 7} {
-			if {![catch {set X $TABLE($MOTOR,Roll); set Y $TABLE($MOTOR,Pitch); set Z $TABLE($MOTOR,Yaw)}]} {
-				if {$X != 0 || $Y != 0 || $Z != 0} {
-					draw_rotor $MOTOR [expr 100 * $X / $MAX] [expr 100 * $Y / $MAX] [expr 100 * $Z / $MAX]
-					set TABLE(SUM,Roll) [expr $TABLE(SUM,Roll) + $X]
-					set TABLE(SUM,Pitch) [expr $TABLE(SUM,Pitch) + $Y]
-					set TABLE(SUM,Yaw) [expr $TABLE(SUM,Yaw) + $Z]
-					incr TABLE(SUM,Motors)
-				}
-			}
-		}
-		.note.cmixer.canvas create oval [expr 250 - 20] [expr 250 - 20] [expr 250 + 20] [expr 250 + 20] -outline gray -tags "fg center" -fill gray
-
-		if {$TABLE(SUM,Pitch) != 0} {
-			.note.cmixer.table.sum.pitch configure -fg red
-		} else {
-			.note.cmixer.table.sum.pitch configure -fg black
-		}
-		if {$TABLE(SUM,Roll) != 0} {
-			.note.cmixer.table.sum.roll configure -fg red
-		} else {
-			.note.cmixer.table.sum.roll configure -fg black
-		}
-		if {$TABLE(SUM,Yaw) != 0} {
-			.note.cmixer.table.sum.yaw configure -fg red
-		} else {
-			.note.cmixer.table.sum.yaw configure -fg black
-		}
-	}
-}
-
-
-canvas .note.cmixer.canvas -relief raised -width 500 -height 500
-pack .note.cmixer.canvas -side left
-
-.note.cmixer.canvas create rec 1 1 500 500 -fill black -tags "bg"
-
-frame .note.cmixer.table
-pack .note.cmixer.table -expand yes -fill both
-
-	frame .note.cmixer.table.title
-	pack .note.cmixer.table.title -expand yes -fill both
-
-		label .note.cmixer.table.title.motor -text "Motor" -width 10
-		pack .note.cmixer.table.title.motor -side left -expand yes -fill x
-
-		label .note.cmixer.table.title.pitch -text "Pitch" -width 10
-		pack .note.cmixer.table.title.pitch -side left -expand yes -fill x
-
-		label .note.cmixer.table.title.roll -text "Roll" -width 10
-		pack .note.cmixer.table.title.roll -side left -expand yes -fill x
-
-		label .note.cmixer.table.title.yaw -text "Yaw" -width 10
-		pack .note.cmixer.table.title.yaw -side left -expand yes -fill x
-
-		label .note.cmixer.table.title.throttle -text "Throttle" -width 10
-		pack .note.cmixer.table.title.throttle -side left -expand yes -fill x
-
-	foreach MOTOR {0 1 2 3 4 5 6 7} {
-		draw_table_line $MOTOR
-	}
-
-
-	frame .note.cmixer.table.sum
-	pack .note.cmixer.table.sum -expand yes -fill x
-
-		label .note.cmixer.table.sum.motor -text "Check" -width 10
-		pack .note.cmixer.table.sum.motor -side left -expand yes -fill x
-
-		label .note.cmixer.table.sum.pitch -text "" -textvariable TABLE(SUM,Pitch) -width 10
-		pack .note.cmixer.table.sum.pitch -side left -expand yes -fill x
-
-		label .note.cmixer.table.sum.roll -text "" -textvariable TABLE(SUM,Roll) -width 10
-		pack .note.cmixer.table.sum.roll -side left -expand yes -fill x
-
-		label .note.cmixer.table.sum.yaw -text "" -textvariable TABLE(SUM,Yaw) -width 10
-		pack .note.cmixer.table.sum.yaw -side left -expand yes -fill x
-
-		label .note.cmixer.table.sum.throttle -text "---" -width 10
-		pack .note.cmixer.table.sum.throttle -side left -expand yes -fill x
-
-
-	frame .note.cmixer.table.motors
-	pack .note.cmixer.table.motors -expand yes -fill x
-
-		label .note.cmixer.table.motors.label -text "Num Motors:" -width 10
-		pack .note.cmixer.table.motors.label -side left -expand no -fill none
-
-		label .note.cmixer.table.motors.num -text "0" -width 10 -textvariable TABLE(SUM,Motors)
-		pack .note.cmixer.table.motors.num -side left -expand no -fill none
-
-
-frame .note.cmixer.buttons
-pack .note.cmixer.buttons -expand no -fill x -side bottom
-
-	button .note.cmixer.buttons.load -text "Load from File" -command {
-		open_mixerfile
-	}
-	pack .note.cmixer.buttons.load -side left -expand yes -fill x
-
-
-	button .note.cmixer.buttons.bload -text "Load from Board" -command {
-		if {$Serial != 0} {
-			puts -nonewline $Serial "cmix\n\r"
-			flush $Serial
-		}
-	}
-	pack .note.cmixer.buttons.bload -side left -expand yes -fill x
-
-
-	button .note.cmixer.buttons.mw32 -text "Save to Board" -command {
-		set MAX_VAL 100
-		set MAX "[get_max]"
-		foreach KEY [array names TABLE] {
-			set NEW_TABLE($KEY) $TABLE($KEY)
-		}
-		foreach MOTOR {0 1 2 3 4 5 6 7} {
-			if {![catch {set X $NEW_TABLE($MOTOR,Roll); set Y $NEW_TABLE($MOTOR,Pitch); set Z $NEW_TABLE($MOTOR,Yaw); set A $NEW_TABLE($MOTOR,Throttle)}]} {
-#				puts "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
+			button .note.cmixer.buttons.bload -text "Load from Board" -command {
 				if {$Serial != 0} {
-					serial_send $Serial "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
+					puts -nonewline $Serial "cmix\n\r"
 					flush $Serial
-					after 100
 				}
 			}
-		}
-		if {$Serial != 0} {
-			puts -nonewline $Serial "cmix\n\r"
-			flush $Serial
-		}
-	}
-	pack .note.cmixer.buttons.mw32 -side left -expand yes -fill x
+			pack .note.cmixer.buttons.bload -side left -expand yes -fill x
 
-
-
-
-proc load_mixerfile {file} {
-	global TABLE
-	set TABLE(SUM,Roll) 0
-	set TABLE(SUM,Pitch) 0
-	set TABLE(SUM,Yaw) 0
-	set TABLE(SUM,Motors) 0
-	foreach MOTOR {0 1 2 3 4 5 6 7} {
-		set TABLE($MOTOR,Throttle) 0
-		set TABLE($MOTOR,Pitch) 0
-		set TABLE($MOTOR,Roll) 0
-		set TABLE($MOTOR,Yaw) 0
-		set TABLE($MOTOR,Port) [expr $MOTOR + 1]
-	}
-	if {[string match "*mkm" $file] || [string match "*.mix" $file]} {
-		set fp [open [lindex $file 0] r]
-		set file_data [read $fp]
-		close $fp
-		set MODE ""
-		foreach line [split $file_data "\n"] {
-			if {[string match "\\\[*\\\]" $line]} {
-				set MODE "[lindex [split $line "\[\]"] 1]"
-				if {$MODE == "Nick"} {
-					set MODE "Pitch"
-				} elseif {$MODE == "Gas"} {
-					set MODE "Throttle"
+			button .note.cmixer.buttons.mw32 -text "Save to Board" -command {
+				set MAX_VAL 100
+				set MAX "[cmix_get_max]"
+				foreach KEY [array names cmix_TABLE] {
+					set NEW_cmix_TABLE($KEY) $cmix_TABLE($KEY)
 				}
-			} elseif {[string match "Motors=*" $line]} {
-			} elseif {[string match "Motor*=*" $line]} {
-				set NUM [expr [string trim [lindex [split $line "="] 0] "Motor"] - 1]
-				set VAL [lindex [split $line "="] 1]
-				set TABLE($NUM,$MODE) $VAL
+				foreach MOTOR {0 1 2 3 4 5 6 7} {
+					if {![catch {set X $NEW_cmix_TABLE($MOTOR,Roll); set Y $NEW_cmix_TABLE($MOTOR,Pitch); set Z $NEW_cmix_TABLE($MOTOR,Yaw); set A $NEW_cmix_TABLE($MOTOR,Throttle)}]} {
+#						puts "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
+						if {$Serial != 0} {
+							serial_send $Serial "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
+							flush $Serial
+							after 100
+						}
+					}
+				}
+				if {$Serial != 0} {
+					puts -nonewline $Serial "cmix\n\r"
+					flush $Serial
+				}
 			}
-		}
-
-	} elseif {[string match "*bfm" $file] || [string match "*cmix" $file]} {
-		set fp [open [lindex $file 0] r]
-		set file_data [read $fp]
-		close $fp
-		foreach line [split $file_data "\n"] {
-			if {[string match "#*:*" $line]} {
-				set NUM [expr [lindex [split $line "#:"] 1] - 1]
-				set TABLE($NUM,Throttle) [lindex $line 2]
-				set TABLE($NUM,Roll) [lindex $line 3]
-				set TABLE($NUM,Pitch) [lindex $line 4]
-				set TABLE($NUM,Yaw) [lindex $line 5]
-			}
-		}
-	}
-	update_table
-}
-
-proc open_mixerfile {} {
-	set types {
-		{"Text files"		{.mix} }
-		{"Text files"		{.mkm} }
-		{"Text files"		{} TEXT}
-		{"All files"		*}
-	}
-	global selected_type
-	if {![info exists selected_type]} {
-		set selected_type "Tcl Scripts"
-	}
-	set file [tk_getOpenFile -filetypes $types -parent . -typevariable selected_type]
-	if {$file != ""} {
-		load_mixerfile $file
-	}
-}
+			pack .note.cmixer.buttons.mw32 -side left -expand yes -fill x
 
 
-.note.cmixer.canvas bind center <3> "allRev"
-.note.cmixer.canvas bind rotor <Any-Enter> ".note.cmixer.canvas itemconfig current -fill red"
-.note.cmixer.canvas bind rotor <Any-Leave> "update_table"
-.note.cmixer.canvas bind rotor <1> "plotDown .note.cmixer.canvas %x %y"
-.note.cmixer.canvas bind rotor <ButtonRelease-1> "plotUp .note.cmixer.canvas %x %y"
-bind .note.cmixer.canvas <B1-Motion> "plotMove .note.cmixer.canvas %x %y"
-bind .note.cmixer.canvas <3> "plotRev .note.cmixer.canvas"
-
-set plot(lastX) 0
-set plot(lastY) 0
-
-
-proc watch {varname key op} {
-	if {! [string match "SUM,*" $key]} {
-		update_table
-	}
-}
-
-trace variable TABLE w watch
-
-update_table
+		cmix_init
+		set cmix_plot(lastX) 0
+		set cmix_plot(lastY) 0
+		trace variable cmix_TABLE w cmix_watch
+		cmix_update_table
+		.note.cmixer.canvas bind center <3> "cmix_allRev"
+		.note.cmixer.canvas bind rotor <Any-Enter> ".note.cmixer.canvas itemconfig current -fill red"
+		.note.cmixer.canvas bind rotor <Any-Leave> "cmix_update_table"
+		.note.cmixer.canvas bind rotor <1> "cmix_plotDown .note.cmixer.canvas %x %y"
+		.note.cmixer.canvas bind rotor <ButtonRelease-1> "cmix_plotUp .note.cmixer.canvas %x %y"
+		bind .note.cmixer.canvas <B1-Motion> "cmix_plotMove .note.cmixer.canvas %x %y"
+		bind .note.cmixer.canvas <3> "cmix_plotRev .note.cmixer.canvas"
 
 
 	ttk::frame .note.servos
@@ -2455,81 +2940,77 @@ update_table
 	ttk::frame .note.aux
 	.note add .note.aux -text "Aux"
 
-	frame .note.aux.aux
-	pack .note.aux.aux -side left -expand yes -fill both
+		frame .note.aux.aux
+		pack .note.aux.aux -side left -expand yes -fill both
 
-	label .note.aux.aux.label2 -text "Position" -relief flat
-	pack .note.aux.aux.label2 -side top -expand no -fill x
+		label .note.aux.aux.label2 -text "Position" -relief flat
+		pack .note.aux.aux.label2 -side top -expand no -fill x
 
-	label .note.aux.aux.label -text "Aux-Name" -relief flat
-	pack .note.aux.aux.label -side top -expand no -fill x
+		label .note.aux.aux.label -text "Aux-Name" -relief flat
+		pack .note.aux.aux.label -side top -expand no -fill x
 
-	set bit_num 0
-	set aux_num2 0
-	foreach aux_name "ANGLE HORIZON BARO MAG CAMSTAB CAMTRIG ARM GPS_HOME GPS_HOLD PASSTHRU HEADFREE BEEPER LEDMAX LLIGHTS HEADADJ" {
-		label .note.aux.aux.name_$aux_name -text "$aux_name" -relief flat
-		pack .note.aux.aux.name_$aux_name -side top -expand yes -fill x
-	}
-
-
-	set bit_num 0
-	set aux_num 0
-	foreach auxname "AUX1 AUX2 AUX3 AUX4" {
-
-		frame .note.aux.aux_$aux_num
-		pack .note.aux.aux_$aux_num -side left -expand yes -fill both
-
-		label .note.aux.aux_$aux_num.label -text "$auxname" -relief flat
-		pack .note.aux.aux_$aux_num.label -side top -expand no -fill x
-
-		frame .note.aux.aux_$aux_num.bits
-		pack .note.aux.aux_$aux_num.bits -side top -expand yes -fill both
-
-		foreach pos "min mid max" {
-			frame .note.aux.aux_$aux_num.bits.bit_$bit_num
-			pack .note.aux.aux_$aux_num.bits.bit_$bit_num -side left -expand yes -fill both
-
-			label .note.aux.aux_$aux_num.bits.bit_$bit_num.label -text "$pos" -relief flat
-			pack .note.aux.aux_$aux_num.bits.bit_$bit_num.label -side top -expand no -fill x
-
-			incr bit_num
+		set bit_num 0
+		set aux_num2 0
+		foreach aux_name "ANGLE HORIZON BARO MAG CAMSTAB CAMTRIG ARM GPS_HOME GPS_HOLD PASSTHRU HEADFREE BEEPER LEDMAX LLIGHTS HEADADJ" {
+			label .note.aux.aux.name_$aux_name -text "$aux_name" -relief flat
+			pack .note.aux.aux.name_$aux_name -side top -expand yes -fill x
 		}
-		incr aux_num
-	}
 
+		set bit_num 0
+		set aux_num 0
+		foreach auxname "AUX1 AUX2 AUX3 AUX4" {
+
+			frame .note.aux.aux_$aux_num
+			pack .note.aux.aux_$aux_num -side left -expand yes -fill both
+
+			label .note.aux.aux_$aux_num.label -text "$auxname" -relief flat
+			pack .note.aux.aux_$aux_num.label -side top -expand no -fill x
+
+			frame .note.aux.aux_$aux_num.bits
+			pack .note.aux.aux_$aux_num.bits -side top -expand yes -fill both
+
+			foreach pos "min mid max" {
+				frame .note.aux.aux_$aux_num.bits.bit_$bit_num
+				pack .note.aux.aux_$aux_num.bits.bit_$bit_num -side left -expand yes -fill both
+
+				label .note.aux.aux_$aux_num.bits.bit_$bit_num.label -text "$pos" -relief flat
+				pack .note.aux.aux_$aux_num.bits.bit_$bit_num.label -side top -expand no -fill x
+
+				incr bit_num
+			}
+			incr aux_num
+		}
 
 
 	ttk::frame .note.scan
 	.note add .note.scan -text "I2C-Scan"
 
-	frame .note.scan.output
-	pack .note.scan.output -side top -expand yes -fill both
+		frame .note.scan.output
+		pack .note.scan.output -side top -expand yes -fill both
 
-		label .note.scan.output.info -text "---"
-		pack .note.scan.output.info -side top -expand no -fill x
+			label .note.scan.output.info -text "---"
+			pack .note.scan.output.info -side top -expand no -fill x
 
-	frame .note.scan.button
-	pack .note.scan.button -side top -expand no -fill x
+		frame .note.scan.button
+		pack .note.scan.button -side top -expand no -fill x
 
-		button .note.scan.button.flash -text "Scan" -command {
-			global Serial
-			global settings
-			if {$Serial != 0} {
-				serial_send $Serial "scani2cbus"
-			} else {
-				.info configure -text "send: error, no serial connection"
-				update
+			button .note.scan.button.start -text "Scan" -command {
+				global Serial
+				global settings
+				if {$Serial != 0} {
+					serial_send $Serial "scani2cbus"
+				} else {
+					.info configure -text "send: error, no serial connection"
+					update
+				}
 			}
-		}
-		pack .note.scan.button.flash -side top -expand yes -fill x
-
-
+			pack .note.scan.button.start -side top -expand yes -fill x
 
 
 	ttk::frame .note.flash
 	.note add .note.flash -text "Flash"
 
-	set TEXT "
+		set TEXT "
 Diese funktion ist hoch experimentell !!!
 bitte nur ausführen wenn Sie die Möglichkeit haben das Board manuell neu zu flashen,
 dazu ist der Zugang zu dem BOOT0-Pin nötig.
@@ -2541,55 +3022,47 @@ Bitte nutzen Sie nur .bin files, da es noch einen Bug im .hex loader gibt !!!
 
 	"
 
-	frame .note.flash.warning
-	pack .note.flash.warning -side top -expand no -fill both
+		frame .note.flash.warning
+		pack .note.flash.warning -side top -expand no -fill both
 
-		label .note.flash.warning.info -text "$TEXT"
-		pack .note.flash.warning.info -side top -expand no -fill x
+			label .note.flash.warning.info -text "$TEXT"
+			pack .note.flash.warning.info -side top -expand no -fill x
 
+		frame .note.flash.list
+		pack .note.flash.list -side top -expand no -fill none
 
-	frame .note.flash.list
-	pack .note.flash.list -side top -expand no -fill none
+			set sources ""
+#			lappend sources "{Baseflight/Original} {http://afrodevices.googlecode.com/svn/trunk/baseflight/obj/baseflight.hex}"
+#			lappend sources "{Baseflight/r283} {http://afrodevices.googlecode.com/svn-history/r283/trunk/baseflight/obj/baseflight.hex}"
+#			lappend sources "{Baseflight/Robert} {http://afrodevices.googlecode.com/svn/branches/Robert/baseflight/obj/baseflight.hex}" ## brocken
+#			lappend sources "{Baseflight/Frog32} {https://raw.github.com/frog32/baseflight/master/obj/baseflight.hex}" ## ssl-only
+#			lappend sources "{Baseflight/harakiri9-BFr279} {http://www.multixmedia.org/test/baseflight_harakiri.hex}"
+			lappend sources "{from file} {file}"
 
-		set sources ""
-#		lappend sources "{Baseflight/Original} {http://afrodevices.googlecode.com/svn/trunk/baseflight/obj/baseflight.hex}"
-#		lappend sources "{Baseflight/r283} {http://afrodevices.googlecode.com/svn-history/r283/trunk/baseflight/obj/baseflight.hex}"
-#		lappend sources "{Baseflight/Robert} {http://afrodevices.googlecode.com/svn/branches/Robert/baseflight/obj/baseflight.hex}" ## brocken
-#		lappend sources "{Baseflight/Frog32} {https://raw.github.com/frog32/baseflight/master/obj/baseflight.hex}" ## ssl-only
-#		lappend sources "{Baseflight/harakiri9-BFr279} {http://www.multixmedia.org/test/baseflight_harakiri.hex}"
-		lappend sources "{from file} {file}"
+			set source_url [lindex [lindex $sources 0] 1]
+			set spin_num 0
+			foreach source $sources {
+				radiobutton .note.flash.list.spin_$spin_num -text "[lindex $source 0] ([lindex $source 1])" -variable source_url -relief flat -value [lindex $source 1] -anchor w
+				pack .note.flash.list.spin_$spin_num -side top -expand no -fill x
+				incr spin_num
+			}
 
-		set source_url [lindex [lindex $sources 0] 1]
-		set spin_num 0
-		foreach source $sources {
-			radiobutton .note.flash.list.spin_$spin_num -text "[lindex $source 0] ([lindex $source 1])" -variable source_url -relief flat -value [lindex $source 1] -anchor w
-			pack .note.flash.list.spin_$spin_num -side top -expand no -fill x
-			incr spin_num
-		}
+		frame .note.flash.space
+		pack .note.flash.space -side top -expand yes -fill both
 
-	frame .note.flash.space
-	pack .note.flash.space -side top -expand yes -fill both
+		frame .note.flash.button
+		pack .note.flash.button -side top -expand no -fill both
 
-	frame .note.flash.button
-	pack .note.flash.button -side top -expand no -fill both
+			button .note.flash.button.flash -text "Flash" -background red -command {
+				.note.flash.button.scale configure -value 0
+				update
+				FirmwarefileDialog . "$source_url"
+			}
+			pack .note.flash.button.flash -side top -expand yes -fill x
 
-		button .note.flash.button.flash -text "Flash" -background red -command {
-			.note.flash.button.scale configure -value 0
-			update
-			FirmwarefileDialog . "$source_url"
-		}
-		pack .note.flash.button.flash -side top -expand yes -fill x
+			ttk::progressbar .note.flash.button.scale
+			pack .note.flash.button.scale -side top -expand no -fill x
 
-		ttk::progressbar .note.flash.button.scale
-		pack .note.flash.button.scale -side top -expand no -fill x
-
-
-
-proc bits2int {bits} {
-	set bits [format %032s [join $bits {}]]
-	binary scan [binary format B* $bits] I1 x
-	set x
-}
 
 
 frame .buttons
@@ -2724,473 +3197,6 @@ button .buttons.flashmode -text "Flashmode" -command {
 }
 pack .buttons.flashmode -side left -expand yes -fill x
 
-
-
-set FlashSerial 0
-
-
-proc FlashSerial_Init {ComPort ComRate} {
-	global FlashSerial
-	catch {close $FlashSerial}
-#	catch {fileevent $FlashSerial readable ""}
-	set iChannel 0
-	if {[catch {
-		set iChannel [open $ComPort w+]
-		fconfigure $iChannel -mode $ComRate,n,8,2 -translation binary -ttycontrol {RTS 1 DTR 0} -blocking FALSE
-#		fileevent $iChannel readable [list rd_chid $iChannel]
-		.info configure -text "FlashSerial-OK: $ComPort @ $ComRate"
-		update
-	}]} {
-		.info configure -text "FlashSerial-Error: $ComPort @ $ComRate"
-		update
-	}
-	return $iChannel
-}
-
-proc FlashSerial_Close {} {
-	global FlashSerial
-	catch {close $FlashSerial}
-}
-
-set FlashTimeout 0
-proc FlashWait_reply {} {
-	global FlashSerial
-	global FlashTimeout
-	set num 0
-	set ch [read $FlashSerial 1]
-	binary scan $ch c num
-	set counter 0
-	while {$num == 0 && $counter < 100} {
-		set ch [read $FlashSerial 1]
-		binary scan $ch c num
-		after 10
-		incr counter
-	}
-	if {$counter >= 100} {
-		.info configure -text "#### timeout ####"
-		set FlashTimeout 1
-		update
-		after 1000
-		return
-	}
-	binary scan $ch c num
-	set ret "[format 0x%x $num]"
-#	puts "< $ret"
-	if {$ret == "0x79"} {
-#		puts "ACK"
-	} elseif {$ret == "0x1f"} {
-		.info configure -text "NACK"
-		update
-		after 1000
-	} else {
-		.info configure -text "Unknown: $ret"
-		update
-	}
-}
-
-proc FlashInitChip {} {
-	global FlashSerial
-	.info configure -text "send init"
-	update
-	puts -nonewline $FlashSerial "[binary format c 0x7F]"
-	flush $FlashSerial
-	FlashWait_reply
-}
-
-proc FlashCmdGeneric {CMD} {
-	global FlashSerial
-	set CSUM [format 0x%x [expr $CMD ^ 0xFF]]
-#	puts "send cmd($CMD): $CSUM"
-	puts -nonewline $FlashSerial "[binary format c $CMD]"
-	puts -nonewline $FlashSerial "[binary format c $CSUM]"
-	flush $FlashSerial
-	FlashWait_reply
-}
-
-proc FlashCmdEraseMemory {} {
-	global FlashSerial
-	.info configure -text "erase flash"
-	update
-	FlashCmdGeneric "0x43"
-#	puts "send addr: 0xFF+0x00"
-	puts -nonewline $FlashSerial "[binary format c 0xFF]"
-	flush $FlashSerial
-	puts -nonewline $FlashSerial "[binary format c 0x00]"
-	flush $FlashSerial
-	FlashWait_reply
-}
-
-proc FlashSendData {START_ADDR BUFFER} {
-	global FlashSerial
-	FlashCmdGeneric 0x31
-	set ADDR_BYTE4 "0x[string range [format %x $START_ADDR] 5 6]"
-	set ADDR_BYTE3 "0x[string range [format %x $START_ADDR] 3 4]"
-	set ADDR_BYTE2 "0x[string range [format %x $START_ADDR] 1 2]"
-	set ADDR_BYTE1 "0x0[string range [format %x $START_ADDR] 0 0]"
-	set ADDR_CRC "[format 0x%x [expr $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4]]"
-#	puts "send_addr: $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4 -- $ADDR_CRC"
-#	puts "$START_ADDR - $BUFFER"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE1]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE2]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE3]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE4]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_CRC]"
-	flush $FlashSerial
-	FlashWait_reply
-	set LEN 256
-#	puts "send len: [format 0x%x [expr $LEN - 1]]"
-	puts -nonewline $FlashSerial "[binary format c "[format 0x%x [expr $LEN - 1]]"]"
-#	puts "send data..."
-	set NUM 0
-	set CRC "0xFF"
-	foreach BYTE $BUFFER {
-		set CRC [expr $CRC ^ $BYTE]
-#		puts -nonewline "$BYTE "
-#		puts "$NUM - $BYTE - [format 0x%x $CRC]"
-		puts -nonewline $FlashSerial "[binary format c $BYTE]"
-		flush $FlashSerial
-		incr NUM
-	}
-#	puts ""
-#	puts "send crc: [format 0x%x $CRC]"
-	puts -nonewline $FlashSerial "[binary format c "[format 0x%x $CRC]"]"
-	flush $FlashSerial
-	FlashWait_reply
-}
-
-proc FlashSendBIN {START_ADDR BINFILE} {
-	set binfile [open $BINFILE r]
-	fconfigure $binfile -translation binary
-	set file_data [read $binfile]
-	close $binfile
-	set BUFFER ""
-	set COUNT 0
-	if {$file_data != ""} {
-		set MAX_ADDR [expr [llength [split $file_data ""]] / 256 + $START_ADDR]
-		puts "# [format 0x%x $MAX_ADDR] #"
-
-		FlashCmdEraseMemory
-
-		foreach BYTE [split $file_data ""] {
-			binary scan $BYTE c num
-			if {$num < 0} {
-				set num [expr $num + 256]
-			}
-	#		puts "$COUNT [format 0x%x $num]"
-			lappend BUFFER "[format 0x%x $num]"
-			if {$COUNT == 255} {
-
-				.info configure -text "write: [format 0x%x $START_ADDR]"
-				.note.flash.button.scale configure -value [expr ($START_ADDR - 0x8000000) * 100 / ($MAX_ADDR - 0x8000000)]
-				update
-
-				FlashSendData $START_ADDR $BUFFER
-				incr START_ADDR 256
-				set BUFFER ""
-				set COUNT 0
-			} else {
-				incr COUNT
-			}
-		}
-		set NUM 0
-		while {$NUM < [expr 256 - $COUNT]} {
-			lappend BUFFER "0xFF"
-			incr NUM
-		}
-		FlashSendData $START_ADDR $BUFFER
-		.info configure -text "write: done"
-		.note.flash.button.scale configure -value 100
-		update
-
-	} else {
-		.info configure -text "error loading BIN-File"
-		update
-		after 1000
-	}
-}
-
-
-catch {package require http}
-
-proc getPage { url } {
-	.info configure -text "Downloading file: $url"
-	update
-	return [ ::http::data [ ::http::geturl $url ] ]
-}
-
-proc FlashSendHEX {START_ADDR HEXFILE} {
-	if {[string tolower [lindex [split $HEXFILE ":"] 0]] == "http"} {
-		set file_data [ getPage $HEXFILE ]
-	} else {
-		set hexfile [open $HEXFILE r]
-		set file_data [read $hexfile]
-		close $hexfile
-	}
-	if {[string range $file_data 0 4] == ":0200"} {
-		set BUFFER ""
-		set START_ADDR "0x8000000"
-
-		set MAX_ADDR $START_ADDR
-
-		foreach LINE $file_data {
-			set HEX_LEN  "[format %i "0x[string range $LINE 1 2]"]"
-			set HEX_ADDR "0x[string range $LINE 3 6]"
-			set HEX_TYPE "0x[string range $LINE 7 8]"
-			set HEX_DATA "[string range $LINE 9 [expr 9 + [expr $HEX_LEN * 2] - 1]]"
-			set HEX_CSUM "0x[string range $LINE [expr 9 + [expr $HEX_LEN * 2]] [expr 9 + [expr $HEX_LEN * 2] + 1]]"
-			set NUM 0
-			while {$NUM < [expr 16 - $HEX_LEN]} {
-				append HEX_DATA "00"
-				incr NUM
-			}
-			if {$HEX_TYPE == "0x00"} {
-				set START 0
-				set PART [string range $HEX_DATA $START [expr $START + 1]]
-				while {$PART != ""} {
-					lappend BUFFER "0x$PART"
-					set LEN "[llength $BUFFER]"
-					if {$LEN == 256} {
-						incr MAX_ADDR 256
-						set BUFFER ""
-					}
-					incr START +2
-					set PART [string range $HEX_DATA $START [expr $START + 1]]
-				}
-			}
-		}
-		incr MAX_ADDR 256
-
-		FlashCmdEraseMemory
-		set BUFFER ""
-		foreach LINE $file_data {
-			set HEX_LEN  "[format %i "0x[string range $LINE 1 2]"]"
-			set HEX_ADDR "0x[string range $LINE 3 6]"
-			set HEX_TYPE "0x[string range $LINE 7 8]"
-			set HEX_DATA "[string range $LINE 9 [expr 9 + [expr $HEX_LEN * 2] - 1]]"
-			set HEX_CSUM "0x[string range $LINE [expr 9 + [expr $HEX_LEN * 2]] [expr 9 + [expr $HEX_LEN * 2] + 1]]"
-			set NUM 0
-			while {$NUM < [expr 16 - $HEX_LEN]} {
-				append HEX_DATA "00"
-				incr NUM
-			}
-			if {$HEX_TYPE == "0x00"} {
-				set START 0
-				set PART [string range $HEX_DATA $START [expr $START + 1]]
-				while {$PART != ""} {
-					lappend BUFFER "0x$PART"
-					set LEN "[llength $BUFFER]"
-					if {$LEN == 256} {
-
-						.info configure -text "write: [format 0x%x $START_ADDR]"
-						.note.flash.button.scale configure -value [expr ($START_ADDR - 0x8000000) * 100 / ($MAX_ADDR - 0x8000000)]
-						update
-
-						FlashSendData $START_ADDR $BUFFER
-						incr START_ADDR 256
-						set BUFFER ""
-					}
-					incr START +2
-					set PART [string range $HEX_DATA $START [expr $START + 1]]
-				}
-			}
-		}
-	#	puts "## $LEN [expr 256 - $LEN] ##"
-		set NUM 0
-		while {$NUM < [expr 256 - $LEN]} {
-			lappend BUFFER "0xFF"
-			incr NUM
-		}
-	#	puts "[llength $BUFFER]"
-		FlashSendData $START_ADDR $BUFFER
-		.info configure -text "write: done"
-		.note.flash.button.scale configure -value 100
-		update
-	} else {
-		.info configure -text "error loading HEX-File"
-		update
-		after 1000
-	}
-}
-
-proc FlashResetSystem {START_ADDR} {
-	global FlashSerial
-	.info configure -text "booting firmware"
-	update
-	FlashCmdGeneric "0x21"
-	set ADDR_BYTE4 "0x[string range [format %x $START_ADDR] 5 6]"
-	set ADDR_BYTE3 "0x[string range [format %x $START_ADDR] 3 4]"
-	set ADDR_BYTE2 "0x[string range [format %x $START_ADDR] 1 2]"
-	set ADDR_BYTE1 "0x0[string range [format %x $START_ADDR] 0 0]"
-	set ADDR_CRC "[format 0x%x [expr $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4]]"
-#	puts "send_addr: $ADDR_BYTE1 ^ $ADDR_BYTE2 ^ $ADDR_BYTE3 ^ $ADDR_BYTE4 -- $ADDR_CRC"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE1]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE2]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE3]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_BYTE4]"
-	puts -nonewline $FlashSerial "[binary format c $ADDR_CRC]"
-	flush $FlashSerial
-	FlashWait_reply
-}
-
-proc FlashFirmwareFile {FILE} {
-	global FlashSerial
-	global FlashTimeout
-	set START_ADDR "0x8000000"
-	set device [.device.spin get]
-	set FlashSerial [FlashSerial_Init $device 115200]
-	set FlashTimeout 0
-	FlashInitChip
-	if {$FlashTimeout != 0} {
-		return
-	}
-	if {[string tolower [lindex [split $FILE "."] end]] == "bin"} {
-		.info configure -text "Binary File"
-		update
-		FlashSendBIN $START_ADDR $FILE
-	} elseif {[string tolower [lindex [split $FILE "."] end]] == "hex"} {
-		.info configure -text "HEX File"
-		update
-		FlashSendHEX $START_ADDR $FILE
-	} else {
-		.info configure -text "Unknown File"
-		update
-	}
-	after 300
-	FlashResetSystem "0x8000000"
-	FlashSerial_Close
-}
-
-#proc getHarakiriLink {} {
-#	set file_data [getPage http://fpv-treff.de/viewtopic.php?f=18&t=1368&p=21784#p21784]
-#	set LINK_LAST ""
-#	foreach PART [split $file_data "<>& \""] {
-#		if {[string match "*Harakiri*HEX.zip*" $PART]} {
-#			return "{$PART} {http://fpv-treff.de/$LINK_LAST}"
-#		} elseif {[string match "*download/file.php?id=*" $PART]} {
-#			set LINK_LAST "[string trimleft $PART "./"]"
-#		}
-#	}
-#	return
-#}
-
-
-proc FirmwarefileDialog {w file} {
-	global Serial
-	global FlashSerial
-	global FlashTimeout
-	set types {
-		{"HEX files"		{.hex}	}
-		{"BIN files"		{.bin}	}
-		{"Text files"		{}		TEXT}
-		{"All files"		*}
-	}
-	if {$file == "file"} {
-		global selected_type
-		if {![info exists selected_type]} {
-			set selected_type "Tcl Scripts"
-		}
-		set file [tk_getOpenFile -filetypes $types -parent $w -typevariable selected_type]
-		puts "$file"
-	}
-	if {$file != ""} {
-		.info configure -text "flashfile: $file"
-		.info configure -background red
-		update
-		after 500
-		if {$Serial != 0} {
-			serial_send $Serial "exit"
-			after 2000
-			puts -nonewline $Serial "R"
-			flush $Serial
-			after 2000
-			catch {fileevent $Serial readable ""}
-			catch {close $Serial}
-			FlashFirmwareFile "$file"
-			.info configure -background lightgray
-			update
-			after 2000
-			connect_serial
-		} else {
-			FlashFirmwareFile "$file"
-			if {$FlashTimeout != 0} {
-				.info configure -background lightgray
-				.info configure -text "Try to connect first"
-				update
-				return
-			}
-			.info configure -background lightgray
-			update
-		}
-	}
-}
-
 label .info -text "Not connected"
 pack .info -side top -expand no -fill x
 
-#####################################################################################
-# XML-Help parser
-#####################################################################################
-
-set OnlineHelp 1
-set HELPTEXT(loaded) 0
-proc xml_tag {tag cl selfcl props body}  {
-	global OnlineHelp
-	global Item
-	global Description
-	global Language
-	global HELPTEXT
-	if {$tag == "OnlineHelp"} {
-		if {$cl == "0"} {
-			set HELPTEXT(loaded) 1
-			set OnlineHelp 0
-			set Item ""
-			set Description ""
-			set Language ""
-		} else {
-			set OnlineHelp 1
-			if {$Description != ""} {
-				set map {Ã¤ ä Ã Ä Ã¼ ü Ã¼ Ü Ã¶ ö Ã Ö Ã ß &lt; < &gt; > <BR> \n}
-				set Description_new [string map $map $Description]
-				set map {\<BR\> \n}
-				set Description [string map $map $Description_new]
-				puts "$Item,$Language=$Description"
-				set HELPTEXT([string toupper $Item],$Language) "$Description"
-			}
-		}
-	}
-	if {$OnlineHelp == "0" && $cl == "0"} {
-		if {$tag == "Item"} {
-			set Item "$body"
-		} elseif {$tag == "Description"} {
-			set Description "$body"
-		} elseif {$tag == "Language"} {
-			set Language "$body"
-		}
-	}
-}
-
-proc xml_parse {cmd xml {start docstart}} {
-	regsub -all \{ $xml {\&ob;} xml
-	regsub -all \} $xml {\&cb;} xml
-	set exp {<(/?)([^\s/>]+)\s*([^/>]*)(/?)>}
-	set sub "\}\n$cmd {\\2} \[expr \{{\\1} ne \"\"\}\] \[expr \{{\\4} ne \"\"\}\] \
-		\[regsub -all -- \{\\s+|(\\s*=\\s*)\} {\\3} \" \"\] \{"
-	regsub -all $exp $xml $sub xml
-	eval "$cmd {$start} 0 0 {} \{ $xml \}"
-	eval "$cmd {$start} 1 1 {} {}"
-}
-
-proc show_help {SEARCH} {
-	global HELPTEXT
-	if {$HELPTEXT(loaded) == 0} {
-		set xml_data [getPage "http://www.klick-punkte.info/download/help.xml"]
-		if {$xml_data != ""} {
-			xml_parse xml_tag $xml_data
-		}
-	}
-	if {[info exists HELPTEXT($SEARCH,DE)]} {
-		tk_dialog .dialog1 "Help: $SEARCH" "$HELPTEXT($SEARCH,DE)" info 0 OK
-	} else {
-		tk_dialog .dialog1 "Help: $SEARCH" "no help for: $SEARCH" info 0 OK
-	}
-}
