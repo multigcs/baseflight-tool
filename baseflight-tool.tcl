@@ -2055,6 +2055,7 @@ proc rd_chid {chid} {
 					set cmix_TABLE($NUM,Pitch) [lindex [split $buffer "\t"] 3]
 					set cmix_TABLE($NUM,Yaw) [lindex [split $buffer "\t"] 4]
 				} elseif {[string match "aux *" $buffer]} {
+					catch {.note add .note.aux -text "Aux"}
 					set aux_num "[lindex $buffer 1]"
 					set aux_val "[lindex $buffer 2]"
 					set bit_num 0
@@ -2069,6 +2070,7 @@ proc rd_chid {chid} {
 					}
 					set aux($aux_num) $aux_val
 				} elseif {[string match "servo *" $buffer]} {
+					catch {.note add .note.servos -text "Servos"}
 					set servo_num [lindex $buffer 1]
 					set servo($servo_num,min) [lindex $buffer 2]
 					set servo($servo_num,max) [lindex $buffer 3]
@@ -2917,7 +2919,7 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 
 
 	ttk::frame .note.servos
-	.note add .note.servos -text "Servos"
+#	.note add .note.servos -text "Servos"
 
 		frame .note.servos.labels
 		pack .note.servos.labels -side top -expand no -fill x
@@ -2938,7 +2940,7 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 		pack .note.servos.labels.rev -side left -expand yes -fill x
 
 	ttk::frame .note.aux
-	.note add .note.aux -text "Aux"
+#	.note add .note.aux -text "Aux"
 
 		frame .note.aux.aux
 		pack .note.aux.aux -side left -expand yes -fill both
