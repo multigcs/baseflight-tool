@@ -2872,8 +2872,30 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 			}
 			pack .note.cmixer.buttons.load -side left -expand yes -fill x
 
+			button .note.cmixer.buttons.aload -text "Load active Mixertable" -command {
+				if {$Serial != 0} {
+					foreach MOTOR {0 1 2 3 4 5 6 7} {
+						set cmix_TABLE($MOTOR,Throttle) 0
+						set cmix_TABLE($MOTOR,Pitch) 0
+						set cmix_TABLE($MOTOR,Roll) 0
+						set cmix_TABLE($MOTOR,Yaw) 0
+						set cmix_TABLE($MOTOR,Port) [expr $MOTOR + 1]
+					}
+					puts -nonewline $Serial "cmix load $mixer_set\n\r"
+					flush $Serial
+				}
+			}
+			pack .note.cmixer.buttons.aload -side left -expand yes -fill x
+
 			button .note.cmixer.buttons.bload -text "Load from Board" -command {
 				if {$Serial != 0} {
+					foreach MOTOR {0 1 2 3 4 5 6 7} {
+						set cmix_TABLE($MOTOR,Throttle) 0
+						set cmix_TABLE($MOTOR,Pitch) 0
+						set cmix_TABLE($MOTOR,Roll) 0
+						set cmix_TABLE($MOTOR,Yaw) 0
+						set cmix_TABLE($MOTOR,Port) [expr $MOTOR + 1]
+					}
 					puts -nonewline $Serial "cmix\n\r"
 					flush $Serial
 				}
@@ -2881,14 +2903,14 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 			pack .note.cmixer.buttons.bload -side left -expand yes -fill x
 
 			button .note.cmixer.buttons.mw32 -text "Save to Board" -command {
-				set MAX_VAL 100
+				set MAX_VAL 1.0
 				set MAX "[cmix_get_max]"
 				foreach KEY [array names cmix_TABLE] {
 					set NEW_cmix_TABLE($KEY) $cmix_TABLE($KEY)
 				}
 				foreach MOTOR {0 1 2 3 4 5 6 7} {
 					if {![catch {set X $NEW_cmix_TABLE($MOTOR,Roll); set Y $NEW_cmix_TABLE($MOTOR,Pitch); set Z $NEW_cmix_TABLE($MOTOR,Yaw); set A $NEW_cmix_TABLE($MOTOR,Throttle)}]} {
-#						puts "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
+						puts "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
 						if {$Serial != 0} {
 							serial_send $Serial "cmix [expr $MOTOR + 1] [expr $MAX_VAL * $A / $MAX] [expr $MAX_VAL * $X / $MAX] [expr $MAX_VAL * $Y / $MAX] [expr $MAX_VAL * $Z / $MAX]"
 							flush $Serial
@@ -2896,10 +2918,10 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 						}
 					}
 				}
-				if {$Serial != 0} {
-					puts -nonewline $Serial "cmix\n\r"
-					flush $Serial
-				}
+#				if {$Serial != 0} {
+#					puts -nonewline $Serial "cmix\n\r"
+#					flush $Serial
+#				}
 			}
 			pack .note.cmixer.buttons.mw32 -side left -expand yes -fill x
 
