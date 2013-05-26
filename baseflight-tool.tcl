@@ -1586,6 +1586,10 @@ proc connect_serial {} {
 		return
 	}
 
+	puts -nonewline $Serial "\r\r\r"
+	flush $Serial
+	after 100
+
 	puts -nonewline $Serial "#\n\r"
 	flush $Serial
 	after 100
