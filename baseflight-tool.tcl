@@ -1062,7 +1062,7 @@ set tabname(gps) "GPS"
 set tabname(alt) "Baro/Sonar"
 set tabname(nav) "Navigation"
 set tabname(gimbal) "Gimbal"
-set tabname(wing) "Wing"
+set tabname(plane) "Airplane"
 set tabname(tri) "Tricopter"
 set tabname(led) "LED"
 set tabname(etc) "ETC"
@@ -1786,14 +1786,24 @@ proc rd_chid {chid} {
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
 				} elseif {[string match "wing_*" $check]} {
-					set section "wing"
+					set section "plane"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
 					catch {
-						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
-						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
+						labelframe .note.settings.subnote.$section.left.$firststr -text "[string toupper $firststr]"
+						pack .note.settings.subnote.$section.left.$firststr -side top -expand yes -fill both
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
+					set wpath ".note.settings.subnote.$section.left.$firststr.[string tolower $var]"
+					set labeltext "[string toupper $laststr]"
+				} elseif {[string match "plane_*" $buffer]} {
+					set section "plane"
+					set firststr [lindex [split $var "_"] 1]
+					set laststr [lrange [split $var "_"] 2 end]
+					catch {
+						labelframe .note.settings.subnote.$section.right.$firststr -text "[string toupper $firststr]"
+						pack .note.settings.subnote.$section.right.$firststr -side top -expand yes -fill both
+					}
+					set wpath ".note.settings.subnote.$section.right.$firststr.$var"
 					set labeltext "[string toupper $laststr]"
 				} elseif {[string match "baro*" $check] || [string match "sonar*" $check]} {
 					set section "alt"
@@ -2731,7 +2741,7 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 		ttk::notebook .note.settings.subnote
 		pack .note.settings.subnote -fill both -expand 1 -padx 2 -pady 3
 
-		foreach section "pid rc vbat pitchrollyaw align accgyromag alt gps nav gimbal wing tri led etc" {
+		foreach section "pid rc vbat pitchrollyaw align accgyromag alt gps nav gimbal plane tri led etc" {
 			ttk::frame .note.settings.subnote.$section
 			.note.settings.subnote add .note.settings.subnote.$section -text "$tabname($section)"
 		}
@@ -2760,6 +2770,12 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 
 		frame .note.settings.subnote.pid.right
 		pack .note.settings.subnote.pid.right -side left -expand yes -fill both
+
+		frame .note.settings.subnote.plane.left
+		pack .note.settings.subnote.plane.left -side left -expand yes -fill both
+
+		frame .note.settings.subnote.plane.right
+		pack .note.settings.subnote.plane.right -side left -expand yes -fill both
 
 	ttk::frame .note.features
 	.note add .note.features -text "Features"
