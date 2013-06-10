@@ -1570,7 +1570,10 @@ proc connect_serial {} {
 	global count
 	global device
 	global baud
+	global I2CDevices
 
+	set I2CDevices ""
+	.note.scan.output.info configure -text "....."
 	.version configure -text "waiting......"
 	.mixer configure -text "waiting......"
 	.info configure -text "waiting......"
@@ -1994,6 +1997,13 @@ proc rd_chid {chid} {
 					update
 				} elseif {[string match "Current settings:*" $buffer]} {
 					set mode "settings"
+
+				} elseif {[string match "I2C device found at*" $buffer]} {
+					set addr [lindex $buffer 5]
+					set chip [lindex $buffer 8]
+					append I2CDevices "\n$buffer"
+					.note.scan.output.info configure -text "$I2CDevices"
+
 				} elseif {[string match "*Scanning I2C-Bus*" $buffer]} {
 					set mode "scani2cbus"
 					set I2CDevices ""
