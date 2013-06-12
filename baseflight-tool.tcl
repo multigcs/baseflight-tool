@@ -2142,8 +2142,12 @@ proc comport_find {} {
 	global comports
 	global device
 	if {[string match "*Linux*" $tcl_platform(os)]} {
-		catch {set comports [glob /dev/ttyUSB*]}
-		set device "[lindex $comports end]"
+		set comports ""
+		set device ""
+		catch {
+			set comports "[glob /dev/ttyUSB*] [glob /dev/ttyACM*]"
+			set device "[lindex $comports end]"
+		}
 	} elseif {[string match "*Windows*" $tcl_platform(os)]} {
 		set comports {"com1:" "com2:" "com3:" "com4:" "com5:" "com6:" "com7:" "com8:" "com9:" "com10:" "com11:" "com12:" "com13:" "com14:" "com15:"}
 		catch {
@@ -2151,15 +2155,19 @@ proc comport_find {} {
 			set values [registry values $serial_base]
 			set res {}
 			foreach valueName $values {
-				set PortName [registry get $serial_base $valueName]
-				lappend res "$PortName:"
+				set PortName "//./[registry get $serial_base $valueName]"
+				lappend res "$PortName"
 			}
 			set comports $res
 		}
 		set device "[lindex $comports end]"
 	} elseif {[string match "*Darwin*" $tcl_platform(os)] || [string match "*MacOS*" $tcl_platform(os)]} {
-		catch {set comports [glob /dev/cu.*]}
-		set device "[lindex $comports end]"
+		set comports ""
+		set device ""
+		catch {
+			set comports [glob /dev/cu.usbserial-*]
+			set device "[lindex $comports end]"
+		}
 	}
 }
 
