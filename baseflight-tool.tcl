@@ -2165,7 +2165,7 @@ proc comport_find {} {
 		set comports ""
 		set device ""
 		catch {
-			set comports [glob /dev/cu.usbserial-*]
+			set comports [glob /dev/cu.*]
 			set device "[lindex $comports end]"
 		}
 	}
