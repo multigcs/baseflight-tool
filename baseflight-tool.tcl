@@ -1808,9 +1808,9 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.right.$firststr.$var"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "baro*" $check] || [string match "sonar*" $check]} {
+				} elseif {[string match "baro*" $check] || [string match "sonar*" $check] || [string match "*snr*" $check] || [string match "al_*" $check]} {
 					set section "alt"
-					set firststr [string tolower [lindex [split $var "_"] 1]]
+					set firststr [string tolower [lindex [split $var "_"] 0]]
 					set laststr [lrange [split $var "_"] 2 end]
 					if {$firststr == ""} {
 						set firststr "etc"
@@ -2145,7 +2145,8 @@ proc comport_find {} {
 		set comports ""
 		set device ""
 		catch {
-			set comports "[glob /dev/ttyUSB*] [glob /dev/ttyACM*]"
+			catch {append comports " [glob /dev/ttyUSB*]"}
+			catch {append comports " [glob /dev/ttyACM*]"}
 			set device "[lindex $comports end]"
 		}
 	} elseif {[string match "*Windows*" $tcl_platform(os)]} {
