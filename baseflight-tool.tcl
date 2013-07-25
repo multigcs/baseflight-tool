@@ -1593,7 +1593,7 @@ proc connect_serial {} {
 	flush $Serial
 	after 100
 
-	puts -nonewline $Serial "#\n\r"
+	puts -nonewline $Serial "####\n\r"
 	flush $Serial
 	after 100
 
@@ -1718,7 +1718,7 @@ proc rd_chid {chid} {
 				if {$max == ""} {
 					set max "99999"
 				}
-				if {[string match "gimbal_*" $check]} {
+				if {[string match "gimbal_*" $check] || [string match "gmbl_*" $check]} {
 					set section "gimbal"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
@@ -1758,7 +1758,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "failsafe_*" $check] || [string match "spektrum_*" $check] || [string match "midrc*" $check] || [string match "rc_*" $check] || [string match "aux*" $check] || [string match "deadband*" $check]} {
+				} elseif {[string match "failsafe_*" $check] || [string match "fs_*" $check] || [string match "spektrum_*" $check] || [string match "midrc*" $check] || [string match "rc_*" $check] || [string match "aux*" $check] || [string match "deadband*" $check]} {
 					set section "rc"
 					if {[string match "failsafe_*" $check]} {
 						set firststr "failsafe"
@@ -1768,11 +1768,21 @@ proc rd_chid {chid} {
 						set firststr "misc"
 					}
 					set laststr $var
-					catch {
-						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
-						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
+
+					if {[string match "aux_*" $var] || [string match "rc_map_*" $var]} {
+						return
+					} elseif {[string match "fs_*" $var]} {
+						set fside "right"
+						set firststr "failsave"
+					} else {
+						set firststr "misc"
+						set fside "left"
 					}
-					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
+					catch {
+						labelframe .note.settings.subnote.$section.$fside.$firststr -text "[string toupper $firststr]"
+						pack .note.settings.subnote.$section.$fside.$firststr -side top -expand yes -fill both
+					}
+					set wpath ".note.settings.subnote.$section.$fside.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
 				} elseif {[string match "vbat*" $check] || [string match "power_*" $check]} {
 					set section "vbat"
@@ -1808,7 +1818,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.right.$firststr.$var"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "baro*" $check] || [string match "sonar*" $check]} {
+				} elseif {[string match "baro*" $check] || [string match "sonar*" $check] || [string match "snr*" $check]} {
 					set section "alt"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
@@ -1854,7 +1864,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "$laststr"
-				} elseif {[string match "align_*" $check]} {
+				} elseif {[string match "align_*" $check] || [string match "algn_*" $check]} {
 					set section "align"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
@@ -1874,7 +1884,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "nav_*" $check] || [string match "autoland*" $check]} {
+				} elseif {[string match "nav_*" $check] || [string match "autoland*" $check] || [string match "al_*" $check]} {
 					set section "nav"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
@@ -1890,7 +1900,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "p_*" $check] || [string match "i_*" $check] || [string match "d_*" $check]} {
+				} elseif {[string match "p_*" $check] || [string match "i_*" $check] || [string match "d_*" $check] || [string match "pid_*" $check]} {
 					set section "pid"
 					set pid [lindex [split $var "_"] 0]
 					set sub [lindex [split $var "_"] 1]
@@ -1921,6 +1931,12 @@ proc rd_chid {chid} {
 						set fside "right"
 					} elseif {[string match "led_*" $check]} {
 						set firststr "led"
+						set fside "right"
+					} elseif {[string match "ph_*" $check]} {
+						set firststr "poshold"
+						set fside "right"
+					} elseif {[string match "rtl_*" $check]} {
+						set firststr "rtl"
 						set fside "right"
 					} elseif {[string match "serial_*" $check]} {
 						set firststr "serial"
@@ -2145,7 +2161,7 @@ proc comport_find {} {
 		set comports ""
 		set device ""
 		catch {
-			set comports "[glob /dev/ttyUSB*] [glob /dev/ttyACM*]"
+			set comports "[glob /dev/ttyUSB*]"
 			set device "[lindex $comports end]"
 		}
 	} elseif {[string match "*Windows*" $tcl_platform(os)]} {
@@ -2782,6 +2798,12 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 
 		frame .note.settings.subnote.etc.right
 		pack .note.settings.subnote.etc.right -side left -expand yes -fill both
+
+		frame .note.settings.subnote.rc.left
+		pack .note.settings.subnote.rc.left -side left -expand yes -fill both
+
+		frame .note.settings.subnote.rc.right
+		pack .note.settings.subnote.rc.right -side left -expand yes -fill both
 
 		frame .note.settings.subnote.pid.left
 		pack .note.settings.subnote.pid.left -side left -expand yes -fill both
