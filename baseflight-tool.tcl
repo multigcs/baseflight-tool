@@ -1666,7 +1666,7 @@ proc rd_chid {chid} {
 	if {$chid == 0} {
 		return
 	}
-#	catch {
+	catch {
 		set ch [read $chid 1]
 
 		if {$ch == "\n"} {
@@ -2150,7 +2150,7 @@ proc rd_chid {chid} {
 		} else {
 			append buffer $ch
 		}
-#	}
+	}
 }
 
 proc comport_find {} {
