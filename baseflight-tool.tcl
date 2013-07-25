@@ -2161,7 +2161,8 @@ proc comport_find {} {
 		set comports ""
 		set device ""
 		catch {
-			set comports "[glob /dev/ttyUSB*]"
+			catch {append comports " [glob /dev/ttyUSB*]"}
+			catch {append comports " [glob /dev/ttyACM*]"}
 			set device "[lindex $comports end]"
 		}
 	} elseif {[string match "*Windows*" $tcl_platform(os)]} {
