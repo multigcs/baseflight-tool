@@ -1643,6 +1643,10 @@ proc connect_serial {} {
 	flush $Serial
 	after 200
 
+	puts -nonewline $Serial "led\n\r"
+	flush $Serial
+	after 200
+
 #	puts -nonewline $Serial "cmix\n\r"
 #	flush $Serial
 #	after 200
@@ -1661,6 +1665,10 @@ proc rd_chid {chid} {
 	global features
 	global aux
 	global aux_bit
+	global led_x
+	global led_y
+	global led_d
+	global led_m
 	global settings
 	global cmix_TABLE
 	global I2CDevices
@@ -2046,13 +2054,11 @@ proc rd_chid {chid} {
 					update
 				} elseif {[string match "Current settings:*" $buffer]} {
 					set mode "settings"
-
 				} elseif {[string match "I2C device found at*" $buffer]} {
 					set addr [lindex $buffer 5]
 					set chip [lindex $buffer 8]
 					append I2CDevices "\n$buffer"
 					.note.scan.output.info configure -text "$I2CDevices"
-
 				} elseif {[string match "*Scanning I2C-Bus*" $buffer]} {
 					set mode "scani2cbus"
 					set I2CDevices ""
@@ -2132,18 +2138,51 @@ proc rd_chid {chid} {
 					set aux_num "[lindex $buffer 1]"
 					set aux_val "[lindex $buffer 2]"
 					set bit_num 0
-if {$aux_num < [llength $AUX_OPTIONS]} {
-					foreach bit [lrange [lreverse [int2bits $aux_val]] 0 14] {
-						set aux_num2 "[expr $bit_num / 3]"
-						catch {
-							checkbutton .note.aux.aux_$aux_num2.bits.bit_$bit_num.aux_$aux_num -text "" -relief flat -variable aux_bit($aux_num,$bit_num)
-							pack .note.aux.aux_$aux_num2.bits.bit_$bit_num.aux_$aux_num -side top -expand yes -fill x
+					if {$aux_num < [llength $AUX_OPTIONS]} {
+						foreach bit [lrange [lreverse [int2bits $aux_val]] 0 14] {
+							set aux_num2 "[expr $bit_num / 3]"
+							catch {
+								checkbutton .note.aux.aux_$aux_num2.bits.bit_$bit_num.aux_$aux_num -text "" -relief flat -variable aux_bit($aux_num,$bit_num)
+								pack .note.aux.aux_$aux_num2.bits.bit_$bit_num.aux_$aux_num -side top -expand yes -fill x
+							}
+							set aux_bit($aux_num,$bit_num) $bit
+							incr bit_num
 						}
-						set aux_bit($aux_num,$bit_num) $bit
-						incr bit_num
+						set aux($aux_num) $aux_val
 					}
-					set aux($aux_num) $aux_val
-}
+
+				} elseif {[string match "led *" $buffer]} {
+					catch {.note add .note.led -text "LED"}
+					set led_n "[lindex $buffer 1]"
+
+					set led_val "[lindex $buffer 2]"
+
+					set led_pos_x "[lindex [split [lindex [split [lindex $buffer 2] ":"] 0] ","] 0]"
+					set led_pos_y "[lindex [split [lindex [split [lindex $buffer 2] ":"] 0] ","] 1]"
+
+					set led_dir "[lindex [split [lindex $buffer 2] ":"] 1]"
+					set led_mode "[lindex [split [lindex $buffer 2] ":"] 2]"
+
+					set buffer ""
+
+					set led_x($led_n) $led_pos_x
+					set led_y($led_n) $led_pos_y
+
+					foreach dir "North South East West Top Bottom" {
+						if {[string match "*[string range $dir 0 0]*" $led_dir]} {
+							set led_d($led_n,$dir) 1
+						} else {
+							set led_d($led_n,$dir) 0
+						}
+					}
+					foreach mode "Warnings Flightmode Indicator Armed Thrust" {
+						if {[string match "*[string range $mode 0 0]*" $led_mode]} {
+							set led_m($led_n,$mode) 1
+						} else {
+							set led_m($led_n,$mode) 0
+						}
+					}
+
 
 				} elseif {[string match "servo *" $buffer]} {
 					catch {.note add .note.servos -text "Servos"}
@@ -3057,6 +3096,78 @@ pack .note -fill both -expand yes -fill x -padx 0 -pady 0
 
 		label .note.servos.labels.rev -text "Reverse"
 		pack .note.servos.labels.rev -side left -expand yes -fill x
+
+	ttk::frame .note.led
+#	.note add .note.led -text "LED"
+
+		frame .note.led.toplabel
+		pack .note.led.toplabel -side top -expand yes -fill both
+
+
+			label .note.led.toplabel.label -text "NUM" -width 10
+			pack .note.led.toplabel.label -side left -expand no
+
+			label .note.led.toplabel.space1 -text "X" -width 10
+			pack .note.led.toplabel.space1 -side left -expand no
+
+			label .note.led.toplabel.space2 -text "Y" -width 10
+			pack .note.led.toplabel.space2 -side left -expand no
+
+			label .note.led.toplabel.space3 -text "DIR" -width 40
+			pack .note.led.toplabel.space3 -side left -expand no
+
+			label .note.led.toplabel.space4 -text "MODES" -width 40
+			pack .note.led.toplabel.space4 -side left -expand no
+
+
+
+		for {set led_n 0} {$led_n < 32} {incr led_n} {
+
+
+			frame .note.led.n_$led_n
+			pack .note.led.n_$led_n -side top -expand yes -fill both
+
+				label .note.led.n_$led_n.label -text "LED$led_n : " -width 10
+				pack .note.led.n_$led_n.label -side left -expand no
+
+				if {[catch {ttk::combobox .note.led.n_$led_n.x -textvariable led_x($led_n) -width 7 -state readonly -values {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15}}]} {
+					spinbox .note.led.n_$led_n.x -values {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} -width 10 -textvariable led_x($led_n)
+				}
+				pack .note.led.n_$led_n.x -side left -expand no
+
+				label .note.led.n_$led_n.space1 -text "" -width 3
+				pack .note.led.n_$led_n.space1 -side left -expand no
+
+				if {[catch {ttk::combobox .note.led.n_$led_n.y -textvariable led_y($led_n) -width 7 -state readonly -values {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15}}]} {
+					spinbox .note.led.n_$led_n.y -values {0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15} -width 10 -textvariable led_y($led_n)
+				}
+				pack .note.led.n_$led_n.y -side left -expand no
+
+				label .note.led.n_$led_n.space2 -text "" -width 3
+				pack .note.led.n_$led_n.space2 -side left -expand no
+
+				foreach dir "N S E W T B" {
+#					radiobutton .note.led.n_$led_n.d_$dir -text "$dir" -variable led_d($led_n,$dir) -relief flat -value 1 -anchor w
+#					pack .note.led.n_$led_n.d_$dir -side left -expand no
+				}
+				foreach dir "North South East West Top Bottom" {
+					radiobutton .note.led.n_$led_n.d_$dir -text "$dir" -variable led_d($led_n,$dir) -relief flat -value 1 -anchor w
+					pack .note.led.n_$led_n.d_$dir -side left -expand no
+				}
+
+				label .note.led.n_$led_n.space3 -text "" -width 3
+				pack .note.led.n_$led_n.space3 -side left -expand no
+
+				foreach mode "W F I A T" {
+#					radiobutton .note.led.n_$led_n.m_$mode -text "$mode" -variable led_m($led_n,$mode) -relief flat -value 1 -anchor w
+#					pack .note.led.n_$led_n.m_$mode -side left -expand no
+				}
+				foreach mode "Warnings Flightmode Indicator Armed Thrust" {
+					radiobutton .note.led.n_$led_n.m_$mode -text "$mode" -variable led_m($led_n,$mode) -relief flat -value 1 -anchor w
+					pack .note.led.n_$led_n.m_$mode -side left -expand no
+				}
+		}
+
 
 	ttk::frame .note.aux
 #	.note add .note.aux -text "Aux"
