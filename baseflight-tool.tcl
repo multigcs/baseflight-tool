@@ -1065,6 +1065,7 @@ set tabname(gimbal) "Gimbal"
 set tabname(plane) "Airplane"
 set tabname(tri) "Tricopter"
 set tabname(led) "LED"
+set tabname(tele) "TELEMETRY"
 set tabname(etc) "ETC"
 set comports ""
 set Serial 0
@@ -1079,6 +1080,7 @@ set FlashTimeout 0
 set OnlineHelp 1
 set HELPTEXT(loaded) 0
 
+set AUX_OPTIONS "ANGLE HORIZON BARO MAG CAMSTAB CAMTRIG ARM GPS_HOME GPS_HOLD PASSTHRU HEADFREE BEEPER LEDMAX LLIGHTS HEADADJ"
 
 #####################################################################################
 # GUI-Functions
@@ -1663,6 +1665,7 @@ proc rd_chid {chid} {
 	global cmix_TABLE
 	global I2CDevices
 	global servo
+	global AUX_OPTIONS
 	if {$chid == 0} {
 		return
 	}
@@ -1758,7 +1761,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "failsafe_*" $check] || [string match "fs_*" $check] || [string match "spektrum_*" $check] || [string match "midrc*" $check] || [string match "rc_*" $check] || [string match "aux*" $check] || [string match "deadband*" $check]} {
+				} elseif {[string match "failsafe_*" $check] || [string match "fs_*" $check] || [string match "spektrum_*" $check] || [string match "midrc*" $check] || [string match "rc_*" $check] || [string match "aux*" $check] || [string match "deadband*" $check] || [string match "min_command*" $check] || [string match "3d_*" $check]} {
 					set section "rc"
 					if {[string match "failsafe_*" $check]} {
 						set firststr "failsafe"
@@ -1784,7 +1787,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$fside.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "vbat*" $check] || [string match "power_*" $check]} {
+				} elseif {[string match "vbat*" $check] || [string match "power_*" $check] || [string match "*current_*" $check] || [string match "battery_*" $check]} {
 					set section "vbat"
 					if {[string match "vbat*" $check]} {
 						set firststr "vbat"
@@ -1808,7 +1811,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.left.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "plane_*" $buffer]} {
+				} elseif {[string match "plane_*" $buffer] || [string match "flaps_*" $buffer] || [string match "fixwing_*" $buffer]} {
 					set section "plane"
 					set firststr [lindex [split $var "_"] 1]
 					set laststr [lrange [split $var "_"] 2 end]
@@ -1818,7 +1821,7 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.right.$firststr.$var"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "baro*" $check] || [string match "sonar*" $check] || [string match "snr*" $check]} {
+				} elseif {[string match "baro*" $check] || [string match "sonar*" $check] || [string match "snr*" $check] || [string match "alt_*" $check]} {
 					set section "alt"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
 					set laststr [lrange [split $var "_"] 2 end]
@@ -1834,6 +1837,24 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
+
+				} elseif {[string match "tele*" $check] || [string match "frsky*" $check] || [string match "serial*" $check]} {
+					set section "tele"
+					set firststr [string tolower [lindex [split $var "_"] 1]]
+					set laststr [lrange [split $var "_"] 2 end]
+					if {$firststr == ""} {
+						set firststr "etc"
+					}
+					if {$laststr == ""} {
+						set laststr $var
+					}
+					catch {
+						labelframe .note.settings.subnote.$section.$firststr -text "[string toupper $firststr]"
+						pack .note.settings.subnote.$section.$firststr -side top -expand yes -fill both
+					}
+					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
+					set labeltext "[string toupper $laststr]"
+
 				} elseif {[string match "led*" $check] || [string match "mwcrgb*" $check]} {
 					set section "led"
 					set firststr [string tolower [lindex [split $var "_"] 1]]
@@ -1900,14 +1921,26 @@ proc rd_chid {chid} {
 					}
 					set wpath ".note.settings.subnote.$section.$firststr.[string tolower $var]"
 					set labeltext "[string toupper $laststr]"
-				} elseif {[string match "p_*" $check] || [string match "i_*" $check] || [string match "d_*" $check] || [string match "pid_*" $check]} {
+				} elseif {[string match "p_*" $check] || [string match "i_*" $check] || [string match "d_*" $check] || [string match "pid_*" $check] || [string match "level_*" $check]} {
 					set section "pid"
 					set pid [lindex [split $var "_"] 0]
 					set sub [lindex [split $var "_"] 1]
-					if {[string match "*alt*" $var] || [string match "*level*" $var]} {
-						set fside "right"
-					} else {
+					set fside "right"
+					if {[string match "*level*" $var]} {
+						set sub "level"
 						set fside "left"
+					} elseif {[string match "*controller*" $var]} {
+						set fside "left"
+					} elseif {[string match "*vel*" $var]} {
+						set fside "left"
+					} elseif {[string match "*alt*" $var]} {
+						set fside "left"
+					} elseif {[string match "*yaw*" $var]} {
+						set sub "yaw"
+					} elseif {[string match "*roll*" $var]} {
+						set sub "roll"
+					} elseif {[string match "*pitch*" $var]} {
+						set sub "pitch"
 					}
 					catch {
 						labelframe .note.settings.subnote.$section.$fside.$sub -text "$sub"
@@ -2099,6 +2132,7 @@ proc rd_chid {chid} {
 					set aux_num "[lindex $buffer 1]"
 					set aux_val "[lindex $buffer 2]"
 					set bit_num 0
+if {$aux_num < [llength $AUX_OPTIONS]} {
 					foreach bit [lrange [lreverse [int2bits $aux_val]] 0 14] {
 						set aux_num2 "[expr $bit_num / 3]"
 						catch {
@@ -2109,6 +2143,8 @@ proc rd_chid {chid} {
 						incr bit_num
 					}
 					set aux($aux_num) $aux_val
+}
+
 				} elseif {[string match "servo *" $buffer]} {
 					catch {.note add .note.servos -text "Servos"}
 					set servo_num [lindex $buffer 1]
@@ -2161,8 +2197,8 @@ proc comport_find {} {
 		set comports ""
 		set device ""
 		catch {
-			catch {append comports " [glob /dev/ttyUSB*]"}
 			catch {append comports " [glob /dev/ttyACM*]"}
+			catch {append comports " [glob /dev/ttyUSB*]"}
 			set device "[lindex $comports end]"
 		}
 	} elseif {[string match "*Windows*" $tcl_platform(os)]} {
@@ -2768,15 +2804,15 @@ pack .device -side top -expand no -fill x
 	pack .device.connect -side left -expand no -fill x
 
 ttk::notebook .note
-pack .note -fill both -expand yes -fill both -padx 2 -pady 3
+pack .note -fill both -expand yes -fill x -padx 0 -pady 0
 
 	ttk::frame .note.settings
 	.note add .note.settings -text "Settings"
 
 		ttk::notebook .note.settings.subnote
-		pack .note.settings.subnote -fill both -expand 1 -padx 2 -pady 3
+		pack .note.settings.subnote -fill x -expand no -padx 0 -pady 0
 
-		foreach section "pid rc vbat pitchrollyaw align accgyromag alt gps nav gimbal plane tri led etc" {
+		foreach section "pid rc vbat pitchrollyaw align accgyromag alt gps nav gimbal plane tri led tele etc" {
 			ttk::frame .note.settings.subnote.$section
 			.note.settings.subnote add .note.settings.subnote.$section -text "$tabname($section)"
 		}
@@ -3036,7 +3072,7 @@ pack .note -fill both -expand yes -fill both -padx 2 -pady 3
 
 		set bit_num 0
 		set aux_num2 0
-		foreach aux_name "ANGLE HORIZON BARO MAG CAMSTAB CAMTRIG ARM GPS_HOME GPS_HOLD PASSTHRU HEADFREE BEEPER LEDMAX LLIGHTS HEADADJ" {
+		foreach aux_name $AUX_OPTIONS {
 			label .note.aux.aux.name_$aux_name -text "$aux_name" -relief flat
 			pack .note.aux.aux.name_$aux_name -side top -expand yes -fill x
 		}
