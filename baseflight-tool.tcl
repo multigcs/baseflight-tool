@@ -3146,24 +3146,16 @@ pack .note -fill both -expand yes -fill x -padx 0 -pady 0
 				label .note.led.n_$led_n.space2 -text "" -width 3
 				pack .note.led.n_$led_n.space2 -side left -expand no
 
-				foreach dir "N S E W T B" {
-#					radiobutton .note.led.n_$led_n.d_$dir -text "$dir" -variable led_d($led_n,$dir) -relief flat -value 1 -anchor w
-#					pack .note.led.n_$led_n.d_$dir -side left -expand no
-				}
 				foreach dir "North South East West Top Bottom" {
-					radiobutton .note.led.n_$led_n.d_$dir -text "$dir" -variable led_d($led_n,$dir) -relief flat -value 1 -anchor w
+					checkbutton .note.led.n_$led_n.d_$dir -text "$dir" -variable led_d($led_n,$dir) -relief flat -anchor w
 					pack .note.led.n_$led_n.d_$dir -side left -expand no
 				}
 
 				label .note.led.n_$led_n.space3 -text "" -width 3
 				pack .note.led.n_$led_n.space3 -side left -expand no
 
-				foreach mode "W F I A T" {
-#					radiobutton .note.led.n_$led_n.m_$mode -text "$mode" -variable led_m($led_n,$mode) -relief flat -value 1 -anchor w
-#					pack .note.led.n_$led_n.m_$mode -side left -expand no
-				}
 				foreach mode "Warnings Flightmode Indicator Armed Thrust" {
-					radiobutton .note.led.n_$led_n.m_$mode -text "$mode" -variable led_m($led_n,$mode) -relief flat -value 1 -anchor w
+					checkbutton .note.led.n_$led_n.m_$mode -text "$mode" -variable led_m($led_n,$mode) -relief flat -anchor w
 					pack .note.led.n_$led_n.m_$mode -side left -expand no
 				}
 		}
@@ -3308,6 +3300,10 @@ button .buttons.save2board -text "Save to Board" -command {
 	global feature_enabled
 	global mixer_set
 	global aux_bit
+	global led_x
+	global led_y
+	global led_d
+	global led_m
 	if {$Serial != 0} {
 		foreach var "[array names settings]" {
 			serial_send $Serial "set $var=$settings($var)"
@@ -3336,6 +3332,28 @@ button .buttons.save2board -text "Save to Board" -command {
 					append bin $aux_bit($val,$val2)
 				}
 				serial_send $Serial "aux $val [bits2int $bin]"
+			}
+		}
+		catch {
+			foreach led_n "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31" {
+				set dirs ""
+				foreach dir "North South East West Top Bottom" {
+					set key "$led_n,$dir"
+					if {$led_d($key) == 1} {
+						append dirs [string range $dir 0 0]
+					}
+				}
+				set modes ""
+				foreach mode "Warnings Flightmode Indicator Armed Thrust" {
+					set key "$led_n,$mode"
+					if {$led_m($key) == 1} {
+						append modes [string range $mode 0 0]
+					}
+				}
+
+				serial_send $Serial "led $led_n led_x($led_n),led_y($led_n):$dirs:$modes"
+#				puts "led $led_n $led_x($led_n),$led_y($led_n):$dirs:$modes"
+
 			}
 		}
 		catch {
