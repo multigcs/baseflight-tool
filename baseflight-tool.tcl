@@ -1647,10 +1647,64 @@ proc connect_serial {} {
 	flush $Serial
 	after 200
 
+	puts -nonewline $Serial "color\n\r"
+	flush $Serial
+	after 200
+
 #	puts -nonewline $Serial "cmix\n\r"
 #	flush $Serial
 #	after 200
 }
+
+proc hsvToRgb {h s v} {
+    set Hi [expr { int( double($h) / 60 ) % 6 }]
+    set f [expr { double($h) / 60 - $Hi }]
+    set s [expr { double($s)/255 }]
+    set v [expr { double($v)/255 }]
+    set p [expr { double($v) * (1 - $s) }]
+    set q [expr { double($v) * (1 - $f * $s) }]
+    set t [expr { double($v) * (1 - (1 - $f) * $s) }]
+    switch -- $Hi {
+        0 {
+            set r $v
+            set g $t
+            set b $p
+        }
+        1 {
+            set r $q
+            set g $v
+            set b $p
+        }
+        2 {
+            set r $p
+            set g $v
+            set b $t
+        }
+        3 {
+            set r $p
+            set g $q
+            set b $v
+        }
+        4 {
+            set r $t
+            set g $p
+            set b $v
+        }
+        5 {
+            set r $v
+            set g $p
+            set b $q
+        }
+        default {
+            error "Wrong Hi value in hsvToRgb procedure! This should never happen!"
+        }
+    }
+    set r [expr {round($r*255)}]
+    set g [expr {round($g*255)}]
+    set b [expr {round($b*255)}]
+    return "[format %2.2X [expr round($r)]][format %2.2X [expr round($g)]][format %2.2X [expr round($b)]]"
+}
+
 
 proc rd_chid {chid} {
 	global buffer
@@ -1665,6 +1719,7 @@ proc rd_chid {chid} {
 	global features
 	global aux
 	global aux_bit
+	global color
 	global led_x
 	global led_y
 	global led_d
@@ -2182,8 +2237,17 @@ proc rd_chid {chid} {
 							set led_m($led_n,$mode) 0
 						}
 					}
-
-
+				} elseif {[string match "color *" $buffer]} {
+					catch {.note add .note.color -text "COLOR"}
+					set color_n "[lindex $buffer 1]"
+					set color_val "[lindex $buffer 2]"
+					set color_h "[lindex [split [lindex $buffer 2] ","] 0]"
+					set color_s "[lindex [split [lindex $buffer 2] ","] 1]"
+					set color_v "[lindex [split [lindex $buffer 2] ","] 2]"
+					set color($color_n,h) $color_h
+					set color($color_n,s) $color_s
+					set color($color_n,v) $color_v
+					set buffer ""
 				} elseif {[string match "servo *" $buffer]} {
 					catch {.note add .note.servos -text "Servos"}
 					set servo_num [lindex $buffer 1]
@@ -2681,6 +2745,21 @@ proc cmix_watch {varname key op} {
 	}
 }
 
+proc color_watch {varname key op} {
+	global color
+	if {[string match "*,h" $key] || [string match "*,s" $key] || [string match "*,v" $key]} {
+		set color_n [lindex [split $key ","] 0]
+		set s $color($color_n,s)
+		if {$s == 0} {
+			set s 255
+		}
+		.note.color.n_$color_n configure -background "#[hsvToRgb $color($color_n,h) [expr $s * 100 / 255] [expr $color($color_n,v) * 100 / 255]]"
+	}
+}
+
+trace variable color w color_watch
+
+
 #####################################################################################
 # XmlHelp-Function
 #####################################################################################
@@ -3097,6 +3176,46 @@ pack .note -fill both -expand yes -fill x -padx 0 -pady 0
 		label .note.servos.labels.rev -text "Reverse"
 		pack .note.servos.labels.rev -side left -expand yes -fill x
 
+	ttk::frame .note.color
+#	.note add .note.color -text "COLOR"
+
+		frame .note.color.toplabel
+		pack .note.color.toplabel -side top -expand yes -fill both
+
+			label .note.color.toplabel.label -text "NUM" -width 10
+			pack .note.color.toplabel.label -side left -expand no
+
+			label .note.color.toplabel.space1 -text "H" -width 30
+			pack .note.color.toplabel.space1 -side left -expand no
+
+			label .note.color.toplabel.space2 -text "S" -width 30
+			pack .note.color.toplabel.space2 -side left -expand no
+
+			label .note.color.toplabel.space3 -text "V" -width 30
+			pack .note.color.toplabel.space3 -side left -expand no
+
+		for {set color_n 0} {$color_n < 16} {incr color_n} {
+
+
+			frame .note.color.n_$color_n -background red
+			pack .note.color.n_$color_n -side top -expand yes -fill both
+
+				label .note.color.n_$color_n.label -text "COLOR$color_n : " -width 10
+				pack .note.color.n_$color_n.label -side left -expand no
+
+				scale .note.color.n_$color_n.h -orient horizontal -length 100 -from 0 -to 360 -variable color($color_n,h) -tickinterval 0 -resolution 1 -showvalue false
+				pack .note.color.n_$color_n.h -side left -expand yes -fill x
+
+				scale .note.color.n_$color_n.s -orient horizontal -length 100 -from 0 -to 255 -variable color($color_n,s) -tickinterval 0 -resolution 1 -showvalue false
+				pack .note.color.n_$color_n.s -side left -expand yes -fill x
+
+				scale .note.color.n_$color_n.v -orient horizontal -length 100 -from 0 -to 255 -variable color($color_n,v) -tickinterval 0 -resolution 1 -showvalue false
+				pack .note.color.n_$color_n.v -side left -expand yes -fill x
+		}
+
+
+
+
 	ttk::frame .note.led
 #	.note add .note.led -text "LED"
 
@@ -3300,6 +3419,7 @@ button .buttons.save2board -text "Save to Board" -command {
 	global feature_enabled
 	global mixer_set
 	global aux_bit
+	global color
 	global led_x
 	global led_y
 	global led_d
@@ -3350,10 +3470,14 @@ button .buttons.save2board -text "Save to Board" -command {
 						append modes [string range $mode 0 0]
 					}
 				}
-
 				serial_send $Serial "led $led_n led_x($led_n),led_y($led_n):$dirs:$modes"
 #				puts "led $led_n $led_x($led_n),$led_y($led_n):$dirs:$modes"
-
+			}
+		}
+		catch {
+			foreach color_n "0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15" {
+				serial_send $Serial "color $color_n $color($color_n,h),$color($color_n,s),$color($color_n,v)"
+#				puts "color $color_n $color($color_n,h),$color($color_n,s),$color($color_n,v)"
 			}
 		}
 		catch {
